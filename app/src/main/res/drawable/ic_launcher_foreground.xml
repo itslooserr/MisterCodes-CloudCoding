@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Glow background for the launcher icon -->
+    <path
+        android:pathData="M31,54 A23,23 0 1,1 77,54 A23,23 0 1,1 31,54"
+        android:strokeWidth="12"
+        android:strokeColor="#1100E5FF"
+        android:fillColor="#00000000" />
+
+    <!-- Terminal Prompt bracket symbol '>' style in high-visibility bold neon cyan -->
+    <path
+        android:pathData="M 33,39 L 47,54 L 33,69"
+        android:strokeWidth="6"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Prompt underscore flash line '_' in neon purple -->
+    <path
+        android:pathData="M 52,69 L 71,69"
+        android:strokeWidth="6"
+        android:strokeColor="#C511FF"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- AI Helper Spark star icon on the top right -->
+    <path
+        android:fillColor="#FFF43C"
+        android:pathData="M 72,32 Q 72,40 80,40 Q 72,40 72,48 Q 72,40 64,40 Q 72,40 72,32" />
+        
+</vector>
