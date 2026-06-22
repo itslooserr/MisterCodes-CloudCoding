@@ -43,7 +43,8 @@ data class SharedSnippet(
     val commentsCount: Int = 0,
     val timestamp: Long = System.currentTimeMillis(),
     val isBookmarked: Boolean = false,
-    val isLiked: Boolean = false
+    val isLiked: Boolean = false,
+    val commentsJson: String = ""
 )
 
 @Entity(tableName = "registered_users")
@@ -80,7 +81,8 @@ data class UserProfile(
     val firebaseSynced: Boolean = true,
     val aiGenerated: Boolean = false,
     val sharedSnippetPosted: Boolean = false,
-    val consolePioneered: Boolean = false
+    val consolePioneered: Boolean = false,
+    val accountCreatedOn: Long = System.currentTimeMillis() - 86400 * 1000L * 2
 )
 
 // --- 2. DATA ACCESS OBJECT (DAO) ---
@@ -146,6 +148,9 @@ interface MisterCodesDao {
     @Query("SELECT * FROM registered_users WHERE email = :email LIMIT 1")
     suspend fun getRegisteredUser(email: String): RegisteredUser?
 
+    @Query("SELECT * FROM registered_users WHERE username = :username LIMIT 1")
+    suspend fun getRegisteredUserByUsername(username: String): RegisteredUser?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRegisteredUser(user: RegisteredUser)
 }
@@ -160,7 +165,7 @@ interface MisterCodesDao {
         UserProfile::class,
         RegisteredUser::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 abstract class MisterCodesDatabase : RoomDatabase() {

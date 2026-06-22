@@ -1,5 +1,10 @@
 package com.example.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import android.widget.Toast
 import android.os.Build
 import android.app.ActivityManager
@@ -161,7 +166,12 @@ fun highlightCode(code: String, isDark: Boolean): AnnotatedString {
 // 1. SPLASH SCREEN
 // ==========================================
 @Composable
-fun SplashScreen(onNavigateToOnboarding: () -> Unit) {
+fun SplashScreen(
+    viewModel: MisterCodesViewModel,
+    onNavigateToMain: () -> Unit,
+    onNavigateToAuth: () -> Unit,
+    onNavigateToOnboarding: () -> Unit
+) {
     var startAnimation by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0.4f,
@@ -174,10 +184,27 @@ fun SplashScreen(onNavigateToOnboarding: () -> Unit) {
         label = "TextOpacity"
     )
 
+    val userProfile by viewModel.userProfile.collectAsState()
+
     LaunchedEffect(key1 = true) {
         startAnimation = true
         delay(2600)
-        onNavigateToOnboarding()
+        
+        val profile = viewModel.userProfile.value
+        if (profile != null) {
+            if (profile.isLoggedIn) {
+                onNavigateToMain()
+            } else {
+                // If they have registered at some point (or if they aren't brand new), go straight to Auth, else Onboarding
+                if (profile.email != "mistercodes@codes.com" || profile.username != "MisterCoder") {
+                    onNavigateToAuth()
+                } else {
+                    onNavigateToOnboarding()
+                }
+            }
+        } else {
+            onNavigateToOnboarding()
+        }
     }
 
     Box(
@@ -674,13 +701,35 @@ fun AuthScreen(viewModel: MisterCodesViewModel, onNavToMain: () -> Unit) {
 
                     isSigningIn = true
                     if (isLoginTab) {
-                        viewModel.performLogin(email)
-                        Toast.makeText(context, "Welcome back, dev session restored!", Toast.LENGTH_SHORT).show()
+                        viewModel.performLogin(
+                            emailOrUsername = email, // Email text-field carries email/username on login tab
+                            password = password,
+                            onSuccess = {
+                                isSigningIn = false
+                                Toast.makeText(context, "Welcome back, dev session restored! 🚀", Toast.LENGTH_SHORT).show()
+                                onNavToMain()
+                            },
+                            onError = { errMsg ->
+                                isSigningIn = false
+                                Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
+                            }
+                        )
                     } else {
-                        viewModel.performSignup(username, email)
-                        Toast.makeText(context, "Welcome to online dev space!", Toast.LENGTH_SHORT).show()
+                        viewModel.performSignup(
+                            username = username,
+                            email = email,
+                            password = password,
+                            onSuccess = {
+                                isSigningIn = false
+                                Toast.makeText(context, "Welcome to online dev space, profile initialized! 🎉", Toast.LENGTH_SHORT).show()
+                                onNavToMain()
+                            },
+                            onError = { errMsg ->
+                                isSigningIn = false
+                                Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
+                            }
+                        )
                     }
-                    onNavToMain()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1316,9 +1365,22 @@ fun CodeEditorScreen(
 
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    var isWorkspaceSecureLocked by remember { mutableStateOf(true) }
+    val isWorkspaceSecureLocked by viewModel.isWorkspaceSecureLocked.collectAsState()
     var passcodeFieldInput by remember { mutableStateOf("") }
     val activePasscode by viewModel.workspacePasscode.collectAsState()
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                viewModel.isWorkspaceSecureLocked.value = true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1395,7 +1457,7 @@ fun CodeEditorScreen(
                             // Already locked, tap again to focus decryption vault
                             Toast.makeText(context, "Enter passcode below to unlock space! 🔐", Toast.LENGTH_SHORT).show()
                         } else {
-                            isWorkspaceSecureLocked = true
+                            viewModel.isWorkspaceSecureLocked.value = true
                             Toast.makeText(context, "File locked with password protection! 🔐", Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -1630,7 +1692,7 @@ fun CodeEditorScreen(
                     Button(
                         onClick = {
                             if (passcodeFieldInput.trim() == activePasscode.trim()) {
-                                isWorkspaceSecureLocked = false
+                                viewModel.isWorkspaceSecureLocked.value = false
                                 passcodeFieldInput = ""
                                 Toast.makeText(context, "Access Granted! File Decrypted. 🔓", Toast.LENGTH_SHORT).show()
                             } else {
@@ -2207,6 +2269,8 @@ fun LearningScreen(viewModel: MisterCodesViewModel, onNavigateToEditor: () -> Un
     val activeChallenge by viewModel.activeChallenge.collectAsState()
     val quizSelectedOption by viewModel.quizSelectedOption.collectAsState()
     val quizResultLabel by viewModel.quizResultLabel.collectAsState()
+    val academicProjects by viewModel.academicProjects.collectAsState()
+    val roadmaps by viewModel.roadmaps.collectAsState()
 
     var activeLearnTab by remember { mutableStateOf(0) } // 0: Roadmaps, 1: Quiz & Challenges
     val coderLanguages = listOf("Python", "Kotlin", "JavaScript", "HTML", "Go", "Rust")
@@ -2513,21 +2577,123 @@ fun LearningScreen(viewModel: MisterCodesViewModel, onNavigateToEditor: () -> Un
                 } else {
                     // TAB 1: ROADMAPS STATIC EXERCISES
                     item {
-                        RoadmapCard(
-                            techName = "Mobile Junior Dev Kotlin",
-                            description = "Step 1: Variables -> Step 2: Lists -> Step 3: Flows & Coroutines -> Step 4: UI Compose Components.",
-                            progress = 1.0f
+                        Text(
+                            text = "Core Developer Paths Dashboard",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
-                        RoadmapCard(
-                            techName = "Data Analyst Python",
-                            description = "Step 1: Numpy maths -> Step 2: Pandas DataFrames -> Step 3: Matplotlib plots -> Step 4: Gemini Prompting.",
-                            progress = 0.45f
+                        Text(
+                            text = "All paths start at 0% Done. Tap complete steps to increment milestones progressively!",
+                            fontSize = 11.sp,
+                            color = Color.LightGray.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
+                    }
+
+                    items(roadmaps) { rm ->
                         RoadmapCard(
-                            techName = "Full Stack JavaScript Web Developer",
-                            description = "Step 1: DOM Elements -> Step 2: Fetch & Promises -> Step 3: Express REST API servers -> Step 4: Postgres database.",
-                            progress = 0.1f
+                            techName = rm.techName,
+                            description = rm.description,
+                            progress = rm.progress,
+                            onClick = { viewModel.incrementRoadmapProgress(rm.id) }
                         )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Daily Academic & Algorithmic Projects",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        Text(
+                            text = "Complete daily algorithm assignments to gain 50 - 200 XP instantly!",
+                            fontSize = 11.sp,
+                            color = Color.LightGray.copy(alpha = 0.8f)
+                        )
+                    }
+                    
+                    items(academicProjects) { proj ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = proj.title,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Level: ${proj.difficulty} | Reward: ${proj.xpReward} XP",
+                                            color = DarkPrimary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    
+                                    Button(
+                                        onClick = { viewModel.completeAcademicProject(proj.id) },
+                                        enabled = !proj.isCompleted,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (proj.isCompleted) Color.DarkGray else DarkPrimary,
+                                            contentColor = Color.Black
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        if (proj.isCompleted) {
+                                            Icon(imageVector = Icons.Filled.Check, contentDescription = "done", modifier = Modifier.size(16.dp), tint = Color.LightGray)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Completed", fontSize = 11.sp, color = Color.LightGray)
+                                        } else {
+                                            Text("Code & Run", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(proj.description, color = Color.LightGray, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.height(14.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    LinearProgressIndicator(
+                                        progress = proj.progress,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp)),
+                                        color = DarkPrimary,
+                                        trackColor = Color.DarkGray
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "${(proj.progress * 100).toInt()}% Prototyped",
+                                        color = DarkPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2536,16 +2702,28 @@ fun LearningScreen(viewModel: MisterCodesViewModel, onNavigateToEditor: () -> Un
 }
 
 @Composable
-fun RoadmapCard(techName: String, description: String, progress: Float) {
+fun RoadmapCard(techName: String, description: String, progress: Float, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 8.dp)
+            .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(techName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(techName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                if (progress >= 1.0f) {
+                    Icon(imageVector = Icons.Filled.CheckCircle, contentDescription = "completed", tint = Color.Green, modifier = Modifier.size(20.dp))
+                } else {
+                    Text("Tap to continue", color = DarkPrimary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
             Spacer(modifier = Modifier.height(6.dp))
             Text(description, color = Color.LightGray, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(12.dp))
@@ -2561,11 +2739,11 @@ fun RoadmapCard(techName: String, description: String, progress: Float) {
                         .weight(1f)
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
-                    color = DarkPrimary,
+                    color = if (progress >= 1.0f) Color.Green else DarkPrimary,
                     trackColor = Color.DarkGray
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Text("${(progress * 100).toInt()}% Done", color = DarkPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("${(progress * 100).toInt()}% Done", color = if (progress >= 1.0f) Color.Green else DarkPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -2900,6 +3078,9 @@ fun CommunityScreen(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
                 ) {
+                    var expandComments by remember { mutableStateOf(false) }
+                    var commentTextInput by remember { mutableStateOf("") }
+
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -3003,11 +3184,111 @@ fun CommunityScreen(
                                 }
                                 Text("${sm.upvotes} likes", color = Color.Gray, fontSize = 12.sp)
                             }
-                            
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Outlined.Chat, contentDescription = "comments", tint = Color.Gray, modifier = Modifier.size(16.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { expandComments = !expandComments }
+                                    .padding(vertical = 4.dp, horizontal = 8.dp)
+                            ) {
+                                Icon(imageVector = Icons.Outlined.Chat, contentDescription = "comments", tint = if (expandComments) DarkPrimary else Color.Gray, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("${sm.commentsCount} comments", color = Color.Gray, fontSize = 12.sp)
+                                Text("${sm.commentsCount} comments", color = if (expandComments) DarkPrimary else Color.Gray, fontSize = 12.sp)
+                            }
+                        }
+
+                        // Inline expanded comment pane
+                        AnimatedVisibility(visible = expandComments) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp)
+                            ) {
+                                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.5f))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                val commentsList = if (sm.commentsJson.isBlank()) {
+                                    emptyList()
+                                } else {
+                                    sm.commentsJson.split("|||")
+                                }
+
+                                if (commentsList.isEmpty()) {
+                                    Text(
+                                        text = "Be the first to share your opinion & feedback on this compilation! ✍️",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    )
+                                } else {
+                                    commentsList.forEach { rawComment ->
+                                        val parts = rawComment.split(":")
+                                        if (parts.size >= 2) {
+                                            val cAuthor = parts[0]
+                                            val cText = parts.subList(1, parts.size).joinToString(":")
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                verticalAlignment = Alignment.Top
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(20.dp)
+                                                        .background(DarkPrimary.copy(alpha = 0.15f), CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = cAuthor.take(1).uppercase(),
+                                                        color = DarkPrimary,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Column {
+                                                    Text(text = "@$cAuthor", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                    Text(text = cText, color = Color.LightGray, fontSize = 11.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = commentTextInput,
+                                        onValueChange = { commentTextInput = it },
+                                        placeholder = { Text("Write a response...", fontSize = 12.sp) },
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedBorderColor = DarkPrimary,
+                                            unfocusedBorderColor = Color.DarkGray
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    IconButton(
+                                        onClick = {
+                                            if (commentTextInput.isNotBlank()) {
+                                                viewModel.addCommentToSnippet(sm.id, commentTextInput)
+                                                commentTextInput = ""
+                                            }
+                                        },
+                                        colors = IconButtonDefaults.iconButtonColors(contentColor = DarkPrimary)
+                                    ) {
+                                        Icon(imageVector = Icons.Filled.Send, contentDescription = "submit comment", modifier = Modifier.size(20.dp))
+                                    }
+                                }
                             }
                         }
                     }
@@ -3023,6 +3304,7 @@ fun CommunityScreen(
 @Composable
 fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
     val profile by viewModel.userProfile.collectAsState()
+    val dailyMissionsList by viewModel.dailyMissions.collectAsState()
 
     var isEditing by remember { mutableStateOf(false) }
     var usernameInput by remember { mutableStateOf("") }
@@ -3030,6 +3312,31 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
     var bioInput by remember { mutableStateOf("") }
 
     val context = LocalContext.current
+
+    val pickPfpLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let {
+            var sizeInBytes: Long = 0
+            try {
+                context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (sizeIndex != -1 && cursor.moveToFirst()) {
+                        sizeInBytes = cursor.getLong(sizeIndex)
+                    }
+                }
+            } catch (e: Exception) {
+                // simple fallback
+            }
+            val maxBytes = 3 * 1024 * 1024 // 3 MB
+            if (sizeInBytes > maxBytes) {
+                Toast.makeText(context, "Image is larger than 3MB. Please select a smaller photo!", Toast.LENGTH_LONG).show()
+            } else {
+                viewModel.updateUserProfileAvatar(it.toString())
+                Toast.makeText(context, "Profile picture updated successfully! 📸", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     LaunchedEffect(profile) {
         profile?.let {
@@ -3099,14 +3406,44 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
         ) {
             // USER CARD
             item {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .background(DarkPrimary.copy(alpha = 0.12f), CircleShape)
-                        .border(2.dp, DarkPrimary, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(imageVector = Icons.Filled.Person, contentDescription = "avatar", tint = DarkPrimary, modifier = Modifier.size(48.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .background(DarkPrimary.copy(alpha = 0.12f), CircleShape)
+                            .border(2.dp, DarkPrimary, CircleShape)
+                            .clickable {
+                                pickPfpLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val pfpSeed = profile?.avatarSeed ?: ""
+                        if (pfpSeed.startsWith("content://") || pfpSeed.startsWith("file://")) {
+                            AsyncImage(
+                                model = pfpSeed,
+                                contentDescription = "avatar",
+                                modifier = Modifier
+                                    .size(98.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = "avatar",
+                                tint = DarkPrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Tap avatar to choose photo from gallery (< 3MB)",
+                        fontSize = 10.sp,
+                        color = Color.LightGray.copy(alpha = 0.8f)
+                    )
                 }
             }
 
@@ -3127,9 +3464,16 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(10.dp))
                         OutlinedTextField(
                             value = emailInput,
-                            onValueChange = { emailInput = it },
-                            label = { Text("Email Address") },
-                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = DarkPrimary, focusedBorderColor = DarkPrimary),
+                            onValueChange = { /* fixed and immutable as requested */ },
+                            label = { Text("Email Address (Fixed)") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.Gray,
+                                unfocusedTextColor = Color.Gray,
+                                focusedLabelColor = Color.Gray,
+                                focusedBorderColor = Color.LightGray.copy(0.3f),
+                                unfocusedBorderColor = Color.LightGray.copy(0.3f)
+                            ),
+                            enabled = false, // Email is fixed and cannot be changed!
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -3151,6 +3495,12 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(profile?.email ?: "guest@mistercodes.com", color = Color.Gray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val creationDateStr = remember(profile?.accountCreatedOn) {
+                            val sdf = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault())
+                            sdf.format(java.util.Date(profile?.accountCreatedOn ?: System.currentTimeMillis()))
+                        }
+                        Text("Account Created On: $creationDateStr", color = Color.Gray.copy(alpha = 0.8f), fontSize = 11.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             profile?.bio ?: "No bio description set yet.",
@@ -3203,8 +3553,116 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                 }
             }
 
+            // DYNAMIC DAILY MISSIONS
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Daily achievement Missions", color = Color.LightGray, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("Claim missions to receive high XP rewards!", color = Color.Gray, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            items(dailyMissionsList) { mission ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = mission.title,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                if (mission.isBadaProject) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFFFFB300).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("EXCLUSIVE (HIGH XP) ⭐", color = Color(0xFFFFB300), fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(mission.description, color = Color.LightGray, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Reward: ${mission.xpReward} XP", color = DarkPrimary, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        if (mission.isCompleted) {
+                            Button(
+                                onClick = { /* already claimed */ },
+                                enabled = false,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.DarkGray,
+                                    disabledContainerColor = Color.DarkGray
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Icon(imageVector = Icons.Filled.CheckCircle, contentDescription = "claimed", tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Claimed", fontSize = 11.sp, color = Color.LightGray)
+                            }
+                        } else if (mission.isReadyToClaim) {
+                            Button(
+                                onClick = { viewModel.claimDailyMission(mission.id) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = DarkPrimary,
+                                    contentColor = Color.Black
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text("CLAIM", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    val toastMsg = when (mission.id) {
+                                        1 -> "Go run and compile some sandbox code in the Editor!"
+                                        2 -> "Go to Community snippets and write response comments!"
+                                        3 -> "Go attempt academy quizzes under Academy section!"
+                                        4 -> "Complete one of the 0% Academic Projects in Learning Academy!"
+                                        5 -> "Go ask Mister Codes AI for a helpful code review!"
+                                        else -> "Complete the mission criteria to unlock!"
+                                    }
+                                    Toast.makeText(context, toastMsg, Toast.LENGTH_LONG).show()
+                                    onBack()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF1E2A47),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+                            ) {
+                                Text("GO", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Logouts
             item {
+                Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = { viewModel.setLoginState(false) },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.15f), contentColor = Color.Red),
@@ -3214,6 +3672,30 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                     Icon(imageVector = Icons.Filled.Logout, contentDescription = "logout", modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Sign Out & Destroy Local Session", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // 50% opaque signature copyright
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "app made and design by @slooserr",
+                        color = Color.LightGray.copy(alpha = 0.5f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Copyright 2026 / All Rights Reserved",
+                        color = Color.LightGray.copy(alpha = 0.5f),
+                        fontSize = 11.sp
+                    )
                 }
             }
         }
@@ -3309,39 +3791,6 @@ fun SettingsScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // THEME TOGGLE
-            item {
-                Text("Appearance Setting", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Filled.DarkMode, contentDescription = "dark", tint = Color.White)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Aesthetic Dark IDE Theme", color = Color.White, fontWeight = FontWeight.Bold)
-                                Text("Low radiant coding colors", color = Color.Gray, fontSize = 11.sp)
-                            }
-                        }
-
-                        Switch(
-                            checked = isDarkState,
-                            onCheckedChange = { viewModel.isDarkMode.value = it },
-                            colors = SwitchDefaults.colors(checkedThumbColor = DarkPrimary, checkedTrackColor = DarkPrimary.copy(alpha = 0.5f))
-                        )
-                    }
-                }
-            }
-
             // TEXT EDITOR PREFERENCE
             item {
                 Text("Editor Sandbox Workspace Configuration", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -3351,33 +3800,6 @@ fun SettingsScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Filled.TextFields, contentDescription = "font size", tint = Color.White)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text("Coding Font Size", color = Color.White, fontWeight = FontWeight.Bold)
-                                    Text("Current: $fontValue sp", color = Color.Gray, fontSize = 11.sp)
-                                }
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { if (fontValue > 10) viewModel.editorFontSize.value = fontValue - 1 }) {
-                                    Icon(imageVector = Icons.Filled.RemoveCircleOutline, contentDescription = "minus", tint = DarkPrimary)
-                                }
-                                Text("$fontValue", color = Color.White, fontWeight = FontWeight.Bold)
-                                IconButton(onClick = { if (fontValue < 26) viewModel.editorFontSize.value = fontValue + 1 }) {
-                                    Icon(imageVector = Icons.Filled.AddCircleOutline, contentDescription = "plus", tint = DarkPrimary)
-                                }
-                            }
-                        }
-
-                        Divider(modifier = Modifier.padding(vertical = 12.dp), color = Color.DarkGray)
-
                         // AUTOSAVE TOGGLE
                         Row(
                             modifier = Modifier.fillMaxWidth(),

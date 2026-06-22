@@ -48,6 +48,17 @@ class MainActivity : ComponentActivity() {
                     // 1. Splash Screen
                     composable("splash") {
                         SplashScreen(
+                            viewModel = viewModel,
+                            onNavigateToMain = {
+                                outerNavController.navigate("main") {
+                                    popUpTo("splash") { inclusive = true }
+                                }
+                            },
+                            onNavigateToAuth = {
+                                outerNavController.navigate("auth") {
+                                    popUpTo("splash") { inclusive = true }
+                                }
+                            },
                             onNavigateToOnboarding = {
                                 outerNavController.navigate("onboarding") {
                                     popUpTo("splash") { inclusive = true }

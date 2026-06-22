@@ -56,6 +56,48 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
     private val _workspacePasscode = MutableStateFlow("")
     val workspacePasscode = _workspacePasscode.asStateFlow()
 
+    // Secure local workspace locking status
+    val isWorkspaceSecureLocked = MutableStateFlow(true)
+
+    // Dynamic Academic/Algorithm Projects
+    data class AcademicProject(
+        val id: Int,
+        val title: String,
+        val description: String,
+        val difficulty: String,
+        val xpReward: Int,
+        val progress: Float = 0.0f,
+        val isCompleted: Boolean = false
+    )
+
+    // Dynamic Achievement Missions
+    data class DailyMission(
+        val id: Int,
+        val title: String,
+        val description: String,
+        val xpReward: Int,
+        val isCompleted: Boolean = false,
+        val isBadaProject: Boolean = false,
+        val isReadyToClaim: Boolean = false
+    )
+
+    private val _academicProjects = MutableStateFlow<List<AcademicProject>>(emptyList())
+    val academicProjects = _academicProjects.asStateFlow()
+
+    data class TechRoadmap(
+        val id: Int,
+        val techName: String,
+        val description: String,
+        val progress: Float = 0.0f,
+        val isCompleted: Boolean = false
+    )
+
+    private val _roadmaps = MutableStateFlow<List<TechRoadmap>>(emptyList())
+    val roadmaps = _roadmaps.asStateFlow()
+
+    private val _dailyMissions = MutableStateFlow<List<DailyMission>>(emptyList())
+    val dailyMissions = _dailyMissions.asStateFlow()
+
     // AI Assistant state
     private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatHistory = _chatHistory.asStateFlow()
@@ -85,8 +127,8 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
     val selectedOtherProfileAuthor = MutableStateFlow<String?>(null)
 
     private fun generateRandomPasscode(): String {
-        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-        return (1..18).map { chars.random() }.joinToString("")
+        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return (1..8).map { chars.random() }.joinToString("")
     }
 
     private fun sendPushNotification(title: String, message: String) {
@@ -124,6 +166,28 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
     init {
         _workspacePasscode.value = generateRandomPasscode()
 
+        _academicProjects.value = listOf(
+            AcademicProject(1, "Interactive Algorithmic Binary Finder", "Implement high-speed binary search algorithms on sorted arrays with dynamic visualizations.", "Medium", 120),
+            AcademicProject(2, "Real-time API Proxy Middleware in Go", "Build light channels, rate limiters, and endpoint mapping for backend microservices.", "Hard", 185),
+            AcademicProject(3, "Modern Jetpack Compose Edge-to-Edge Forms", "Design forms with adaptive window inset padding and input verification rules.", "Easy", 75),
+            AcademicProject(4, "Fast Fourier Transform Signal Visualization", "A mathematical filter to decompose signal inputs into frequencies reactively.", "Hard", 200),
+            AcademicProject(5, "Asynchronous Thread Pool Worker in C++", "Manage scheduling queues, race condition mutexes, and workers pool manually.", "Medium", 140)
+        )
+
+        _roadmaps.value = listOf(
+            TechRoadmap(1, "Mobile Junior Dev Kotlin", "Step 1: Variables -> Step 2: Lists -> Step 3: Flows & Coroutines -> Step 4: UI Compose Components."),
+            TechRoadmap(2, "Data Analyst Python", "Step 1: Numpy maths -> Step 2: Pandas DataFrames -> Step 3: Matplotlib plots -> Step 4: Gemini Prompting."),
+            TechRoadmap(3, "Full Stack JavaScript Web Developer", "Step 1: DOM Elements -> Step 2: Fetch & Promises -> Step 3: Express REST API servers -> Step 4: Postgres database.")
+        )
+
+        _dailyMissions.value = listOf(
+            DailyMission(1, "Compile First Project", "Verify your draft or custom sandbox layout without compile errors.", 110),
+            DailyMission(2, "Engage with Community Feed", "View live submissions and add a real comment on your peer's repository.", 130),
+            DailyMission(3, "Complete 2 Algorithm Challenges", "Answer multiple academy quizzes and solve the coding puzzles correctly.", 150),
+            DailyMission(4, "Full Stack Sandbox Integration", "Configure an offline SQLite database query simulation dynamically. ⭐ EXCLUSIVE HIGH-XP STORY", 250, isBadaProject = true),
+            DailyMission(5, "AI Code Review Assistance", "Ask Gemini AI to review an asynchronous Kotlin thread implementation. ⭐ EXCLUSIVE HIGH-XP STORY", 300, isBadaProject = true)
+        )
+
         viewModelScope.launch {
             repository.prepaidLaunchInitialization()
             // If active projects exist, select first python project
@@ -141,6 +205,38 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                     "🔐 Dynamic Passcode Rotated",
                     "Secret workspace passcode updated: $newPasscode"
                 )
+            }
+        }
+
+        // Streak check and notification simulation (approx every 12 seconds for responsive verification)
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(12000)
+                val profile = userProfile.value
+                if (profile != null && profile.isLoggedIn) {
+                    val now = System.currentTimeMillis()
+                    val diffHours = (now - profile.lastActiveTime) / (1000L * 60 * 60)
+                    if (diffHours >= 17 && diffHours < 24) {
+                        sendPushNotification(
+                            "🔥 Don't break your streak!",
+                            "Laxmi! You haven't programmed today. Open Mister Codes to protect your ${profile.currentStreak}-day streak!"
+                        )
+                    } else if (diffHours in 24..47) {
+                        sendPushNotification(
+                            "⏰ Streak Safety Warning",
+                            "Only a few hours left! Don't lose your ${profile.currentStreak} days streak!"
+                        )
+                    } else if (diffHours >= 48) {
+                        val lostStreak = profile.currentStreak
+                        if (lostStreak > 0) {
+                            sendPushNotification(
+                                "💔 You lost your streak!",
+                                "Oh no! You lost your $lostStreak days active streak. Log in now to rebuild it from day 1!"
+                            )
+                            repository.saveProfile(profile.copy(currentStreak = 1, lastActiveTime = now))
+                        }
+                    }
+                }
             }
         }
 
@@ -236,6 +332,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
             if (profile != null && !profile.consolePioneered) {
                 repository.saveProfile(profile.copy(consolePioneered = true))
             }
+            markMissionReadyToClaim(1)
         }
     }
 
@@ -266,6 +363,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
             val aiMessage = ChatMessage("ai", response)
             _chatHistory.value = _chatHistory.value + aiMessage
             _aiLoading.value = false
+            markMissionReadyToClaim(5)
         }
     }
 
@@ -305,6 +403,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                 repository.submitChallengeSolution(challenge.id, "Selected option: $selected", isCompleted = true)
                 // Refresh active challenge state
                 _activeChallenge.value = challenge.copy(isCompleted = true, userSolution = "Selected option: $selected")
+                markMissionReadyToClaim(3)
             }
         } else {
             _quizResultLabel.value = "Incorrect. Try reading the question again!"
@@ -327,6 +426,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                 _quizResultLabel.value = "All unit tests passed! Excellent coding! +50 XP"
                 repository.submitChallengeSolution(challenge.id, code, isCompleted = true)
                 _activeChallenge.value = challenge.copy(isCompleted = true, userSolution = code)
+                markMissionReadyToClaim(3)
             } else {
                 _quizResultLabel.value = "Failed! Error details:\n${res.errors.ifEmpty { "Output mismatch. Output: " + res.output + " but expected: " + testCaseInput }}"
             }
@@ -349,12 +449,113 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
     fun toggleSnippetLike(snippetId: Int) {
         viewModelScope.launch {
             repository.toggleSnippetLike(snippetId)
+            markMissionReadyToClaim(2)
         }
     }
 
     fun toggleSnippetBookmark(snippetId: Int) {
         viewModelScope.launch {
             repository.toggleSnippetBookmark(snippetId)
+            markMissionReadyToClaim(2)
+        }
+    }
+
+    fun addCommentToSnippet(snippetId: Int, text: String) {
+        viewModelScope.launch {
+            val user = userProfile.value ?: UserProfile()
+            repository.addCommentToSnippet(snippetId, user.username, text)
+            markMissionReadyToClaim(2)
+        }
+    }
+
+    fun completeAcademicProject(id: Int) {
+        viewModelScope.launch {
+            val list = _academicProjects.value.map {
+                if (it.id == id && !it.isCompleted) {
+                    val nextProgress = it.progress + 0.25f
+                    if (nextProgress >= 1.0f) {
+                        val reward = it.xpReward
+                        val profile = userProfile.value
+                        if (profile != null) {
+                            val newXp = profile.xp + reward
+                            val newLevel = (newXp / 100.0).toInt() + 1
+                            repository.saveProfile(profile.copy(xp = newXp, level = newLevel))
+                            sendPushNotification(
+                                "🎓 Academic Project Completed!",
+                                "You finished '${it.title}' and gained $reward XP!"
+                            )
+                        }
+                        markMissionReadyToClaim(4)
+                        it.copy(progress = 1.0f, isCompleted = true)
+                    } else {
+                        it.copy(progress = nextProgress)
+                    }
+                } else {
+                    it
+                }
+            }
+            _academicProjects.value = list
+        }
+    }
+
+    fun incrementRoadmapProgress(id: Int) {
+        val list = _roadmaps.value.map {
+            if (it.id == id && !it.isCompleted) {
+                val nextProgress = it.progress + 0.25f
+                if (nextProgress >= 1.0f) {
+                    sendPushNotification(
+                        "🗺️ Roadmap Path Completed!",
+                        "You fully completed the '${it.techName}' track! Great job!"
+                    )
+                    it.copy(progress = 1.0f, isCompleted = true)
+                } else {
+                    it.copy(progress = nextProgress)
+                }
+            } else {
+                it
+            }
+        }
+        _roadmaps.value = list
+    }
+
+    fun markMissionReadyToClaim(id: Int) {
+        val list = _dailyMissions.value.map {
+            if (it.id == id && !it.isCompleted) {
+                if (!it.isReadyToClaim) {
+                    sendPushNotification(
+                        "🔓 Mission Ready!",
+                        "You matched criteria for: '${it.title}'! Clime XP now."
+                    )
+                }
+                it.copy(isReadyToClaim = true)
+            } else {
+                it
+            }
+        }
+        _dailyMissions.value = list
+    }
+
+    fun claimDailyMission(id: Int) {
+        viewModelScope.launch {
+            val list = _dailyMissions.value.map {
+                if (it.id == id && !it.isCompleted && it.isReadyToClaim) {
+                    val reward = it.xpReward
+                    val profile = userProfile.value
+                    if (profile != null) {
+                        val newXp = profile.xp + reward
+                        val newLevel = (newXp / 100.0).toInt() + 1
+                        repository.saveProfile(profile.copy(xp = newXp, level = newLevel))
+                        sendPushNotification(
+                            "🏆 Milestone Achieved!",
+                            "Mission unlocked: '${it.title}', claimed $reward XP!"
+                        )
+                    }
+                    it.copy(isCompleted = true)
+                } else {
+                    it
+                }
+            }
+            _dailyMissions.value = list
         }
     }
 
@@ -377,22 +578,40 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
         return !taken.contains(trimmed)
     }
 
-    fun performSignup(username: String, email: String) {
+    fun performSignup(username: String, email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            repository.registerNewUser(username, email)
+            val ok = repository.registerNewUser(username, email, password)
+            if (ok) {
+                onSuccess()
+            } else {
+                onError("This Email is already registered! Please log in instead.")
+            }
         }
     }
 
-    fun performLogin(email: String) {
+    fun performLogin(emailOrUsername: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            repository.performLogin(email)
+            val ok = repository.performLogin(emailOrUsername, password)
+            if (ok) {
+                onSuccess()
+            } else {
+                onError("Incorrect username/email or password!")
+            }
         }
     }
 
-    fun updateProfileDetails(username: String, email: String, bio: String) {
+    fun updateProfileDetails(username: String, email: String, bio: String, avatarSeed: String? = null) {
         viewModelScope.launch {
             val curr = userProfile.value ?: UserProfile()
-            repository.updateProfileWithDetails(username, email, bio, curr.avatarSeed)
+            val finalAvatar = avatarSeed ?: curr.avatarSeed
+            repository.updateProfileWithDetails(username, email, bio, finalAvatar)
+        }
+    }
+
+    fun updateUserProfileAvatar(uriString: String) {
+        viewModelScope.launch {
+            val curr = userProfile.value ?: UserProfile()
+            repository.updateProfileWithDetails(curr.username, curr.email, curr.bio, uriString)
         }
     }
 

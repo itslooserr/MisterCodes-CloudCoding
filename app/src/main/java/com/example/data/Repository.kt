@@ -56,7 +56,7 @@ class MisterCodesRepository private constructor(context: Context) {
                     level = 1,
                     currentStreak = 1,
                     solvedChallengesCount = 0,
-                    isLoggedIn = true
+                    isLoggedIn = false
                 )
             )
         }
@@ -178,6 +178,23 @@ class MisterCodesRepository private constructor(context: Context) {
         }
     }
 
+    suspend fun addCommentToSnippet(snippetId: Int, author: String, text: String) {
+        allSharedSnippets.firstOrNull()?.find { it.id == snippetId }?.let { original ->
+            val cleanAuthor = author.ifBlank { "AnonDev" }
+            val cleanText = text.replace(":", " ").replace("|", " ").trim()
+            if (cleanText.isNotBlank()) {
+                val newCommentSegment = "$cleanAuthor:$cleanText"
+                val updatedJson = if (original.commentsJson.isBlank()) {
+                    newCommentSegment
+                } else {
+                    original.commentsJson + "|||" + newCommentSegment
+                }
+                val updatedCount = original.commentsCount + 1
+                dao.updateSharedSnippet(original.copy(commentsJson = updatedJson, commentsCount = updatedCount))
+            }
+        }
+    }
+
     suspend fun toggleSnippetLike(snippetId: Int) {
         allSharedSnippets.firstOrNull()?.find { it.id == snippetId }?.let { original ->
             val isCurrentlyLiked = original.isLiked
@@ -224,15 +241,23 @@ class MisterCodesRepository private constructor(context: Context) {
 
     suspend fun updateProfileWithDetails(username: String, email: String, bio: String, avatarSeed: String) {
         val profile = dao.getUserProfile() ?: UserProfile()
-        saveProfile(
-            profile.copy(
-                username = username,
-                email = email,
-                bio = bio,
-                avatarSeed = avatarSeed,
-                lastActiveTime = System.currentTimeMillis()
-            )
+        val updatedProfile = profile.copy(
+            username = username,
+            email = email,
+            bio = bio,
+            avatarSeed = avatarSeed,
+            lastActiveTime = System.currentTimeMillis()
         )
+        saveProfile(updatedProfile)
+
+        val existingUser = dao.getRegisteredUser(email)
+        if (existingUser != null) {
+            dao.insertRegisteredUser(existingUser.copy(
+                username = username,
+                bio = bio,
+                avatarSeed = avatarSeed
+            ))
+        }
     }
 
     suspend fun updateStreakStamp() {
@@ -266,35 +291,19 @@ class MisterCodesRepository private constructor(context: Context) {
         }
     }
 
-    suspend fun registerNewUser(username: String, email: String): Boolean {
+    suspend fun registerNewUser(username: String, email: String, password: String): Boolean {
         val cleanEmail = email.trim().lowercase()
         val cleanUsername = username.trim()
         val existing = dao.getRegisteredUser(cleanEmail)
         if (existing != null) {
-            // Already registered! Load back all stats cleanly
-            val loadedProfile = UserProfile(
-                id = 1,
-                username = existing.username,
-                email = existing.email,
-                avatarSeed = existing.avatarSeed,
-                xp = existing.xp,
-                level = existing.level,
-                currentStreak = if (existing.currentStreak <= 0) 1 else existing.currentStreak,
-                solvedChallengesCount = existing.solvedChallengesCount,
-                isLoggedIn = true,
-                bio = existing.bio,
-                aiGenerated = existing.aiGenerated,
-                sharedSnippetPosted = existing.sharedSnippetPosted,
-                consolePioneered = existing.consolePioneered
-            )
-            saveProfile(loadedProfile)
-            return true
+            return false // Already registered, cannot overwrite
         }
 
         // Setup brand new registration starting with Level 1, XP 10, Streak 1 and everything locked
         val newUser = RegisteredUser(
             email = cleanEmail,
             username = cleanUsername,
+            password = password,
             bio = "Developer working in $cleanUsername workspace. AI compiler integration active.",
             avatarSeed = "seed_user_" + cleanUsername.length,
             xp = 10.0,
@@ -327,10 +336,21 @@ class MisterCodesRepository private constructor(context: Context) {
         return true
     }
 
-    suspend fun performLogin(email: String): Boolean {
-        val cleanEmail = email.trim().lowercase()
-        val existing = dao.getRegisteredUser(cleanEmail)
+    suspend fun performLogin(emailOrUsername: String, password: String): Boolean {
+        val cleanInput = emailOrUsername.trim()
+        val cleanEmail = cleanInput.lowercase()
+        // Try finding by email first
+        var existing = dao.getRegisteredUser(cleanEmail)
+        if (existing == null) {
+            // Then try finding by username
+            existing = dao.getRegisteredUserByUsername(cleanInput)
+        }
+
         if (existing != null) {
+            // Verify password match
+            if (existing.password != password) {
+                return false
+            }
             val loadedProfile = UserProfile(
                 id = 1,
                 username = existing.username,
@@ -349,41 +369,7 @@ class MisterCodesRepository private constructor(context: Context) {
             saveProfile(loadedProfile)
             return true
         } else {
-            // New active profile placeholder on login
-            val fallbackUsername = cleanEmail.substringBefore("@")
-            val newUser = RegisteredUser(
-                email = cleanEmail,
-                username = fallbackUsername,
-                bio = "Developer workspace. AI compiler integration active.",
-                avatarSeed = "seed_user_" + fallbackUsername.length,
-                xp = 10.0,
-                level = 1,
-                currentStreak = 1,
-                solvedChallengesCount = 0,
-                isLoggedIn = true,
-                aiGenerated = false,
-                sharedSnippetPosted = false,
-                consolePioneered = false
-            )
-            dao.insertRegisteredUser(newUser)
-
-            val profile = UserProfile(
-                id = 1,
-                username = newUser.username,
-                email = newUser.email,
-                avatarSeed = newUser.avatarSeed,
-                xp = newUser.xp,
-                level = newUser.level,
-                currentStreak = newUser.currentStreak,
-                solvedChallengesCount = newUser.solvedChallengesCount,
-                isLoggedIn = true,
-                bio = newUser.bio,
-                aiGenerated = newUser.aiGenerated,
-                sharedSnippetPosted = newUser.sharedSnippetPosted,
-                consolePioneered = newUser.consolePioneered
-            )
-            saveProfile(profile)
-            return true
+            return false
         }
     }
 
@@ -560,6 +546,33 @@ class MisterCodesRepository private constructor(context: Context) {
                 description = "What does the select statement do in Go?",
                 questionType = "QUIZ",
                 optionsJson = "[\"Chooses between switch arguments in constant scopes\", \"Blocks on multiple channel operations, selecting the one that is ready\", \"Evaluates file system variables statically during builds\", \"Implements mutex lock releases automatically\"]",
+                correctAnswer = "1"
+            ),
+            TutorialChallenge(
+                title = "Python Generator Yields",
+                language = "Python",
+                difficulty = "Medium",
+                description = "What is the primary operational difference between the yield and return keyword statements inside Python functions?",
+                questionType = "QUIZ",
+                optionsJson = "[\"return exits the execution scope immediately, while yield pauses execution retaining local state variables\", \"yield is slower and only works for list index structures\", \"return produces nested tuples while yield prints tracebacks\", \"yield cannot be referenced inside loops or generator chains\"]",
+                correctAnswer = "0"
+            ),
+            TutorialChallenge(
+                title = "Kotlin Coroutines Dispatchers",
+                language = "Kotlin",
+                difficulty = "Hard",
+                description = "In Jetpack Compose or modern Android apps, which Dispatcher reference is recommended for blocking I/O (e.g. SQLite database, heavy local file cache operations, or web requests)?",
+                 questionType = "QUIZ",
+                 optionsJson = "[\"Dispatchers.Main\", \"Dispatchers.Default\", \"Dispatchers.IO\", \"Dispatchers.Unconfined\"]",
+                 correctAnswer = "2"
+            ),
+            TutorialChallenge(
+                title = "Rust Reference Pointer Constraints",
+                language = "Rust",
+                difficulty = "Hard",
+                description = "What is the primary compile-time borrow checker rule governing safe references to a resource in the Rust compiler memory management paradigm?",
+                questionType = "QUIZ",
+                optionsJson = "[\"Any number of mutable pointers or pointers with static durations are permitted concurrently\", \"Either any number of immutable references or exactly one mutable reference at any given time\", \"Pointers can coexist without lock scopes if marked unsafe\", \"References must be explicitly cleaned up on garbage collector exits\"]",
                 correctAnswer = "1"
             )
         )
