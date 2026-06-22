@@ -119,3 +119,7 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+
+// > **Crafted by:** [@slooserr](https://www.google.com/search?q=https://instagram.com/slooserr) 📱
+// remove this while debugging
