@@ -61,7 +61,8 @@ data class RegisteredUser(
     val isLoggedIn: Boolean = false,
     val aiGenerated: Boolean = false,
     val sharedSnippetPosted: Boolean = false,
-    val consolePioneered: Boolean = false
+    val consolePioneered: Boolean = false,
+    val isPremium: Boolean = false
 )
 
 @Entity(tableName = "user_profile")
@@ -82,7 +83,16 @@ data class UserProfile(
     val aiGenerated: Boolean = false,
     val sharedSnippetPosted: Boolean = false,
     val consolePioneered: Boolean = false,
-    val accountCreatedOn: Long = System.currentTimeMillis() - 86400 * 1000L * 2
+    val accountCreatedOn: Long = System.currentTimeMillis() - 86400 * 1000L * 2,
+    val isPremium: Boolean = false
+)
+
+@Entity(tableName = "activity_logs")
+data class UserActivityLog(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val actionType: String,
+    val description: String,
+    val timestamp: Long = System.currentTimeMillis()
 )
 
 // --- 2. DATA ACCESS OBJECT (DAO) ---
@@ -153,6 +163,22 @@ interface MisterCodesDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRegisteredUser(user: RegisteredUser)
+
+    @Query("SELECT * FROM registered_users ORDER BY xp DESC")
+    suspend fun getAllRegisteredUsers(): List<RegisteredUser>
+
+    @Query("SELECT * FROM registered_users ORDER BY xp DESC")
+    fun getAllRegisteredUsersFlow(): Flow<List<RegisteredUser>>
+
+    // Activity Logs
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertActivityLog(log: UserActivityLog)
+
+    @Query("SELECT * FROM activity_logs ORDER BY timestamp DESC")
+    fun getAllActivityLogsFlow(): Flow<List<UserActivityLog>>
+
+    @Query("SELECT * FROM activity_logs ORDER BY timestamp DESC")
+    suspend fun getAllActivityLogs(): List<UserActivityLog>
 }
 
 // --- 3. DATABASE CONVERTERS & HOLDER ---
@@ -163,9 +189,10 @@ interface MisterCodesDao {
         TutorialChallenge::class,
         SharedSnippet::class,
         UserProfile::class,
-        RegisteredUser::class
+        RegisteredUser::class,
+        UserActivityLog::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class MisterCodesDatabase : RoomDatabase() {

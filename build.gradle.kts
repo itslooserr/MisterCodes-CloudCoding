@@ -6,10 +6,3 @@ plugins {
   alias(libs.plugins.roborazzi) apply false
   alias(libs.plugins.secrets) apply false
 }
-
-
-
-//# > **Crafted by:** [@slooserr](https://www.google.com/search?q=https://instagram.com/slooserr) 📱
-//# remove this while debugging
-
-// Copyright 2026

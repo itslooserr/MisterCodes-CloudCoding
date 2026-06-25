@@ -27,6 +27,7 @@ import com.example.ui.theme.MyApplicationTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableHighRefreshRate()
         enableEdgeToEdge()
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -36,8 +37,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MisterCodesViewModel = viewModel()
             val isDarkSystem by viewModel.isDarkMode.collectAsState()
+            val userProfile by viewModel.userProfile.collectAsState()
+            val isPremium = userProfile?.isPremium == true
 
-            MyApplicationTheme(darkTheme = isDarkSystem, dynamicColor = false) {
+            MyApplicationTheme(darkTheme = isDarkSystem, dynamicColor = false, isPremium = isPremium) {
                 val outerNavController = rememberNavController()
 
                 NavHost(
@@ -102,6 +105,36 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
+        }
+    }
+
+    private fun enableHighRefreshRate() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                val display = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    display
+                } else {
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay
+                }
+                
+                val modes = display?.supportedModes
+                if (!modes.isNullOrEmpty()) {
+                    val highestMode = modes.maxWithOrNull(
+                        compareBy<android.view.Display.Mode> { it.refreshRate }
+                            .thenBy { it.physicalWidth }
+                            .thenBy { it.physicalHeight }
+                    )
+                    
+                    if (highestMode != null) {
+                        val params = window.attributes
+                        params.preferredDisplayModeId = highestMode.modeId
+                        window.attributes = params
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }

@@ -27,6 +27,8 @@ class MisterCodesRepository private constructor(context: Context) {
     val allChallenges: Flow<List<TutorialChallenge>> = dao.getAllChallengesFlow()
     val allSharedSnippets: Flow<List<SharedSnippet>> = dao.getAllSharedSnippetsFlow()
     val userProfile: Flow<UserProfile?> = dao.getUserProfileFlow()
+    val allRegisteredUsers: Flow<List<RegisteredUser>> = dao.getAllRegisteredUsersFlow()
+    val allActivityLogs: Flow<List<UserActivityLog>> = dao.getAllActivityLogsFlow()
 
     companion object {
         @Volatile
@@ -101,6 +103,26 @@ class MisterCodesRepository private constructor(context: Context) {
 
         // 5. Update active day streak
         updateStreakStamp()
+
+        // 6. Prepopulate other RegisteredUsers if empty
+        val existingRegCount = dao.getAllRegisteredUsers().size
+        if (existingRegCount <= 1) {
+            dao.insertRegisteredUser(RegisteredUser(email = "ssdf@mistercodes.com", username = "ssdf", password = "123", bio = "System developer and compiler hacker.", xp = 450.0, level = 4, currentStreak = 8, isLoggedIn = false))
+            dao.insertRegisteredUser(RegisteredUser(email = "stylequeen@mistercodes.com", username = "stylequeen", password = "123", bio = "Lead visual and UX architect.", xp = 380.0, level = 3, currentStreak = 5, isLoggedIn = false))
+            dao.insertRegisteredUser(RegisteredUser(email = "flowmaster@mistercodes.com", username = "flowmaster", password = "123", bio = "Asynchronous Kotlin state manager.", xp = 290.0, level = 2, currentStreak = 12, isLoggedIn = false))
+            dao.insertRegisteredUser(RegisteredUser(email = "algosmaster@mistercodes.com", username = "algosmaster", password = "123", bio = "Algorithm researcher and quiz solver.", xp = 620.0, level = 6, currentStreak = 15, isLoggedIn = false))
+            dao.insertRegisteredUser(RegisteredUser(email = "mistercoder@mistercodes.com", username = "mistercoder", password = "123", bio = "Original system coder.", xp = 50.0, level = 1, currentStreak = 2, isLoggedIn = false))
+        }
+    }
+
+    suspend fun addActivityLog(actionType: String, description: String) {
+        dao.insertActivityLog(
+            UserActivityLog(
+                actionType = actionType,
+                description = description,
+                timestamp = System.currentTimeMillis()
+            )
+        )
     }
 
     // Project Actions
@@ -207,10 +229,13 @@ class MisterCodesRepository private constructor(context: Context) {
     suspend fun saveProfile(profile: UserProfile) {
         dao.insertUserProfile(profile)
         if (profile.email.isNotBlank()) {
+            val existing = dao.getRegisteredUser(profile.email.trim().lowercase())
+            val savedPassword = existing?.password ?: ""
             dao.insertRegisteredUser(
                 RegisteredUser(
                     email = profile.email,
                     username = profile.username,
+                    password = savedPassword,
                     bio = profile.bio,
                     avatarSeed = profile.avatarSeed,
                     xp = profile.xp,
@@ -220,7 +245,8 @@ class MisterCodesRepository private constructor(context: Context) {
                     isLoggedIn = profile.isLoggedIn,
                     aiGenerated = profile.aiGenerated,
                     sharedSnippetPosted = profile.sharedSnippetPosted,
-                    consolePioneered = profile.consolePioneered
+                    consolePioneered = profile.consolePioneered,
+                    isPremium = profile.isPremium
                 )
             )
         }
@@ -364,7 +390,8 @@ class MisterCodesRepository private constructor(context: Context) {
                 bio = existing.bio,
                 aiGenerated = existing.aiGenerated,
                 sharedSnippetPosted = existing.sharedSnippetPosted,
-                consolePioneered = existing.consolePioneered
+                consolePioneered = existing.consolePioneered,
+                isPremium = existing.isPremium
             )
             saveProfile(loadedProfile)
             return true
@@ -378,9 +405,12 @@ class MisterCodesRepository private constructor(context: Context) {
         if (!isLoggedIn) {
             // Save current stats to registry before logging off session
             if (profile.email.isNotBlank()) {
+                val existing = dao.getRegisteredUser(profile.email.trim().lowercase())
+                val savedPassword = existing?.password ?: ""
                 val reg = RegisteredUser(
                     email = profile.email,
                     username = profile.username,
+                    password = savedPassword,
                     bio = profile.bio,
                     avatarSeed = profile.avatarSeed,
                     xp = profile.xp,
@@ -390,7 +420,8 @@ class MisterCodesRepository private constructor(context: Context) {
                     isLoggedIn = false,
                     aiGenerated = profile.aiGenerated,
                     sharedSnippetPosted = profile.sharedSnippetPosted,
-                    consolePioneered = profile.consolePioneered
+                    consolePioneered = profile.consolePioneered,
+                    isPremium = profile.isPremium
                 )
                 dao.insertRegisteredUser(reg)
             }

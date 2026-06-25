@@ -1,37 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Glow background for the launcher icon -->
+    <!-- Hexagonal glowing shield background for cybersecurity/precision -->
     <path
-        android:pathData="M31,54 A23,23 0 1,1 77,54 A23,23 0 1,1 31,54"
-        android:strokeWidth="12"
-        android:strokeColor="#1100E5FF"
-        android:fillColor="#00000000" />
+        android:pathData="M54,20 L84,35 L84,68 L54,88 L24,68 L24,35 Z"
+        android:strokeWidth="2.5">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="24"
+                android:startY="20"
+                android:endX="84"
+                android:endY="88"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#1A243F" />
+                <item android:offset="1.0" android:color="#0B101D" />
+            </gradient>
+        </aapt:attr>
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="24"
+                android:startY="20"
+                android:endX="84"
+                android:endY="88"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="1.0" android:color="#C511FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!-- Terminal Prompt bracket symbol '>' style in high-visibility bold neon cyan -->
+    <!-- Stylized '<' Bracket in gradient Neon Cyan to Blue -->
     <path
-        android:pathData="M 33,39 L 47,54 L 33,69"
-        android:strokeWidth="6"
-        android:strokeColor="#00E5FF"
+        android:pathData="M 44,40 L 32,54 L 44,68"
+        android:strokeWidth="5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
+        android:fillColor="#00000000">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="32"
+                android:startY="40"
+                android:endX="44"
+                android:endY="68"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="1.0" android:color="#0055FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!-- Prompt underscore flash line '_' in neon purple -->
+    <!-- Stylized '>' Bracket in gradient Neon Purple to Pink -->
     <path
-        android:pathData="M 52,69 L 71,69"
-        android:strokeWidth="6"
-        android:strokeColor="#C511FF"
+        android:pathData="M 64,40 L 76,54 L 64,68"
+        android:strokeWidth="5"
         android:strokeLineCap="round"
-        android:fillColor="#00000000" />
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="64"
+                android:startY="40"
+                android:endX="76"
+                android:endY="68"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#C511FF" />
+                <item android:offset="1.0" android:color="#FF00A0" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-    <!-- AI Helper Spark star icon on the top right -->
+    <!-- Central forward slash '/' dividing elements in pure gold -->
+    <path
+        android:pathData="M 58,36 L 50,72"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="50"
+                android:startY="36"
+                android:endX="58"
+                android:endY="72"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFF43C" />
+                <item android:offset="1.0" android:color="#FFB300" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Glowing Cyber Spark stars for AI assist integration -->
     <path
         android:fillColor="#FFF43C"
-        android:pathData="M 72,32 Q 72,40 80,40 Q 72,40 72,48 Q 72,40 64,40 Q 72,40 72,32" />
-        
+        android:pathData="M 80,24 Q 80,29 85,29 Q 80,29 80,34 Q 80,29 75,29 Q 80,29 80,24" />
 </vector>

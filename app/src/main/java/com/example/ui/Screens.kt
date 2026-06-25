@@ -11,6 +11,10 @@ import android.app.ActivityManager
 import android.os.StatFs
 import android.os.Environment
 import android.content.Context
+import android.app.DatePickerDialog
+import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Locale
 import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -864,6 +869,7 @@ fun DashboardScreen(
     val allChallenges by viewModel.challenges.collectAsState()
 
     val completedChallengesCount = allChallenges.count { it.isCompleted }
+    var dashboardTab by remember { mutableStateOf("overview") }
 
     Column(
         modifier = Modifier
@@ -908,12 +914,64 @@ fun DashboardScreen(
             }
         }
 
-        LazyColumn(
+        // Sliding Sub-Tab Row
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .weight(1f),
-            contentPadding = PaddingValues(bottom = 80.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .background(Color(0xFF151D30), RoundedCornerShape(24.dp))
+                .padding(4.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (dashboardTab == "overview") DarkPrimary else Color.Transparent)
+                    .clickable { dashboardTab = "overview" }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "System Overview",
+                    color = if (dashboardTab == "overview") Color.Black else Color.Gray,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (dashboardTab == "history") DarkPrimary else Color.Transparent)
+                    .clickable { dashboardTab = "history" }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = "History Logs",
+                        tint = if (dashboardTab == "history") Color.Black else Color.Gray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Terminal Logs",
+                        color = if (dashboardTab == "history") Color.Black else Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+
+        if (dashboardTab == "overview") {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
             // STATS / PROGRESS CARD
             item {
                 Card(
@@ -1308,6 +1366,9 @@ fun DashboardScreen(
                 }
             }
         }
+        } else {
+            TerminalLogsView(viewModel = viewModel)
+        }
     }
 }
 
@@ -1368,6 +1429,15 @@ fun CodeEditorScreen(
     val isWorkspaceSecureLocked by viewModel.isWorkspaceSecureLocked.collectAsState()
     var passcodeFieldInput by remember { mutableStateOf("") }
     val activePasscode by viewModel.workspacePasscode.collectAsState()
+
+    val isMultiFileProject by viewModel.isMultiFileProject.collectAsState()
+    val multiFileMap by viewModel.multiFileMap.collectAsState()
+    val selectedFilePath by viewModel.selectedFilePath.collectAsState()
+
+    var showScaffoldSheet by remember { mutableStateOf(false) }
+    var showFileExplorer by remember { mutableStateOf(true) }
+    var showAddFileDialog by remember { mutableStateOf(false) }
+    var newFilePathInput by remember { mutableStateOf("") }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -1442,8 +1512,32 @@ fun CodeEditorScreen(
                 }
             }
 
-            // Shortcut Search
+            // Shortcut Search & Project Scaffolder
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isMultiFileProject) {
+                    IconButton(
+                        onClick = { showFileExplorer = !showFileExplorer },
+                        modifier = Modifier.testTag("toggle_file_explorer_btn")
+                    ) {
+                        Icon(
+                            imageVector = if (showFileExplorer) Icons.Filled.FolderOpen else Icons.Filled.Folder,
+                            contentDescription = "Toggle File Explorer",
+                            tint = if (showFileExplorer) DarkPrimary else Color.LightGray
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = { showScaffoldSheet = true },
+                    modifier = Modifier.testTag("project_scaffolder_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.CreateNewFolder,
+                        contentDescription = "Project Scaffolder",
+                        tint = DarkPrimary
+                    )
+                }
+
                 IconButton(
                     onClick = { showSearchRow = !showSearchRow },
                     modifier = Modifier.testTag("editor_search_toggle")
@@ -1711,31 +1805,150 @@ fun CodeEditorScreen(
             } else {
                 val highlighted = highlightCode(editorCodeText, true)
 
-            // Split line numbering sidebar and raw layout
-            Row(modifier = Modifier.fillMaxSize()) {
-                // Line count sidebar generator
-                val linesCount = editorCodeText.split("\n").size.coerceAtLeast(1)
-                Column(
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .width(42.dp)
-                        .background(Color(0xFF0C101B))
-                        .padding(top = 16.dp, bottom = 16.dp),
-                    horizontalAlignment = Alignment.End
-                ) {
-                    for (i in 1..linesCount) {
-                        Text(
-                            text = "$i",
-                            color = Color.DarkGray,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = fontSizeState.sp,
-                            modifier = Modifier.padding(end = 8.dp, bottom = 2.dp),
-                            textAlign = TextAlign.End
-                        )
-                    }
-                }
+                // Split line numbering sidebar and raw layout
+                Row(modifier = Modifier.fillMaxSize()) {
+                    if (isMultiFileProject && showFileExplorer) {
+                        Column(
+                            modifier = Modifier
+                                .width(170.dp)
+                                .fillMaxHeight()
+                                .background(Color(0xFF090D15))
+                                .border(width = 0.5.dp, color = Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF0C121F))
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "WORKSPACE FILES",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DarkPrimary,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                                IconButton(
+                                    onClick = { showAddFileDialog = true },
+                                    modifier = Modifier.size(24.dp).testTag("add_file_btn")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.NoteAdd,
+                                        contentDescription = "Add File",
+                                        tint = Color.LightGray,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
 
-                // Interactive styled edit block consisting of transparent input and highlighted visual
+                            val treeNodes = buildTreeNodes(multiFileMap.keys)
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .padding(vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                items(treeNodes) { node ->
+                                    val isActive = node.path == selectedFilePath
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(if (isActive) DarkPrimary.copy(alpha = 0.12f) else Color.Transparent)
+                                            .clickable {
+                                                if (!node.isFolder) {
+                                                    viewModel.onSelectFile(node.path)
+                                                }
+                                            }
+                                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Spacer(modifier = Modifier.width((node.depth * 8).dp))
+                                        
+                                        val icon = if (node.isFolder) {
+                                            Icons.Filled.Folder
+                                        } else {
+                                            when {
+                                                node.path.endsWith(".kt") -> Icons.Filled.Code
+                                                node.path.endsWith(".py") -> Icons.Filled.Code
+                                                node.path.endsWith(".js") || node.path.endsWith(".jsx") -> Icons.Filled.Code
+                                                node.path.endsWith(".json") -> Icons.Filled.Description
+                                                else -> Icons.Filled.Description
+                                            }
+                                        }
+
+                                        val iconColor = if (node.isFolder) {
+                                            Color(0xFFFFB300)
+                                        } else if (isActive) {
+                                            DarkPrimary
+                                        } else {
+                                            Color.LightGray
+                                        }
+
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = iconColor,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+
+                                        Spacer(modifier = Modifier.width(4.dp))
+
+                                        Text(
+                                            text = node.label,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = if (isActive) Color.White else Color.LightGray,
+                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        if (!node.isFolder) {
+                                            IconButton(
+                                                onClick = { viewModel.deleteFileFromProject(node.path) },
+                                                modifier = Modifier.size(18.dp).testTag("delete_file_${node.path.replace("/", "_")}")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Close,
+                                                    contentDescription = "Delete File",
+                                                    tint = Color.Red.copy(alpha = 0.5f),
+                                                    modifier = Modifier.size(10.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Line count sidebar generator
+                    val linesCount = editorCodeText.split("\n").size.coerceAtLeast(1)
+                    Column(
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .width(42.dp)
+                            .background(Color(0xFF0C101B))
+                            .padding(top = 16.dp, bottom = 16.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        for (i in 1..linesCount) {
+                            Text(
+                                text = "$i",
+                                color = Color.DarkGray,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = fontSizeState.sp,
+                                modifier = Modifier.padding(end = 8.dp, bottom = 2.dp),
+                                textAlign = TextAlign.End
+                            )
+                        }
+                    }
+
+                    // Interactive styled edit block consisting of transparent input and highlighted visual
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1795,6 +2008,184 @@ fun CodeEditorScreen(
             }
         }
         }
+    }
+
+    if (showScaffoldSheet) {
+        var selectedTemplate by remember { mutableStateOf("Android (Jetpack Compose MVVM)") }
+        var customPrefixInput by remember { mutableStateOf("app/src/main/java/com/example/myapp") }
+        var dropdownExpanded by remember { mutableStateOf(false) }
+        
+        val templatesList = listOf(
+            "Android (Jetpack Compose MVVM)",
+            "React SPA (Boilerplate)",
+            "Node.js Express & MongoDB",
+            "FastAPI Python Backend",
+            "Go Clean Architecture"
+        )
+        
+        AlertDialog(
+            onDismissRequest = { showScaffoldSheet = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Filled.CreateNewFolder, contentDescription = null, tint = DarkPrimary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Project Scaffolder ✨", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Scaffold complete multi-file directory structures and professional architecture boilerplate with one click.",
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+                    
+                    Text("Select Project Template", color = DarkPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { dropdownExpanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White, containerColor = Color(0xFF0C101B)),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(selectedTemplate, fontSize = 12.sp)
+                                Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        
+                        DropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false },
+                            modifier = Modifier.background(Color(0xFF151D30)).fillMaxWidth(0.7f)
+                        ) {
+                            templatesList.forEach { template ->
+                                DropdownMenuItem(
+                                    text = { Text(template, color = Color.White, fontSize = 12.sp) },
+                                    onClick = {
+                                        selectedTemplate = template
+                                        customPrefixInput = when (template) {
+                                            "Android (Jetpack Compose MVVM)" -> "app/src/main/java/com/example/myapp"
+                                            "React SPA (Boilerplate)" -> "src"
+                                            "Node.js Express & MongoDB" -> "src"
+                                            "FastAPI Python Backend" -> "app"
+                                            "Go Clean Architecture" -> ""
+                                            else -> ""
+                                        }
+                                        dropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    
+                    Text("Prefix / Package Directory Name", color = DarkPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    
+                    OutlinedTextField(
+                        value = customPrefixInput,
+                        onValueChange = { customPrefixInput = it },
+                        placeholder = { Text("e.g. app/src/main/java/com/mycompany", fontSize = 11.sp, color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = DarkPrimary,
+                            unfocusedBorderColor = Color.DarkGray
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        textStyle = TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.generateProjectStructure(selectedTemplate, customPrefixInput)
+                        showScaffoldSheet = false
+                        Toast.makeText(context, "Generated structure for $selectedTemplate! 📂🚀", Toast.LENGTH_LONG).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("confirm_scaffolding_btn")
+                ) {
+                    Text("Generate Structure ⚡", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showScaffoldSheet = false }) {
+                    Text("Cancel", color = Color.LightGray, fontSize = 12.sp)
+                }
+            },
+            containerColor = Color(0xFF151D30)
+        )
+    }
+
+    if (showAddFileDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddFileDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Filled.NoteAdd, contentDescription = null, tint = DarkPrimary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add New File", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Type the path and filename you want to create (e.g. src/utils/helpers.js):",
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = newFilePathInput,
+                        onValueChange = { newFilePathInput = it },
+                        placeholder = { Text("path/file.ext", fontSize = 11.sp, color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = DarkPrimary,
+                            unfocusedBorderColor = Color.DarkGray
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        textStyle = TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newFilePathInput.isNotBlank()) {
+                            viewModel.addNewFileToProject(newFilePathInput.trim(), "// New code file\n")
+                            newFilePathInput = ""
+                            showAddFileDialog = false
+                            Toast.makeText(context, "File added!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("confirm_add_file_btn")
+                ) {
+                    Text("Create", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddFileDialog = false }) {
+                    Text("Cancel", color = Color.LightGray)
+                }
+            },
+            containerColor = Color(0xFF151D30)
+        )
     }
 }
 
@@ -2265,6 +2656,7 @@ fun ChatBubbleItem(msg: ChatMessage, onCopy: (String) -> Unit) {
 // ==========================================
 @Composable
 fun LearningScreen(viewModel: MisterCodesViewModel, onNavigateToEditor: () -> Unit) {
+    val context = LocalContext.current
     val challenges by viewModel.challenges.collectAsState()
     val activeChallenge by viewModel.activeChallenge.collectAsState()
     val quizSelectedOption by viewModel.quizSelectedOption.collectAsState()
@@ -2585,7 +2977,7 @@ fun LearningScreen(viewModel: MisterCodesViewModel, onNavigateToEditor: () -> Un
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                         Text(
-                            text = "All paths start at 0% Done. Tap complete steps to increment milestones progressively!",
+                            text = "All paths start at 0% Done. Write and execute code matching each language's concepts inside your editor sandbox projects to unlock progress!",
                             fontSize = 11.sp,
                             color = Color.LightGray.copy(alpha = 0.8f),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -2597,7 +2989,21 @@ fun LearningScreen(viewModel: MisterCodesViewModel, onNavigateToEditor: () -> Un
                             techName = rm.techName,
                             description = rm.description,
                             progress = rm.progress,
-                            onClick = { viewModel.incrementRoadmapProgress(rm.id) }
+                            onClick = {
+                                val requiredLang = if (rm.id == 1) "Kotlin" else if (rm.id == 2) "Python" else "JavaScript"
+                                val currentStepName = when (rm.progress) {
+                                    0.0f -> if (rm.id == 1) "Variables (val/var)" else if (rm.id == 2) "Numpy maths" else "DOM Elements"
+                                    0.25f -> if (rm.id == 1) "Lists (listOf/Array)" else if (rm.id == 2) "Pandas DataFrames" else "Fetch & Promises"
+                                    0.50f -> if (rm.id == 1) "Flows & Coroutines (launch/delay)" else if (rm.id == 2) "Matplotlib plots" else "Express REST API servers"
+                                    0.75f -> if (rm.id == 1) "UI Compose Components (@Composable)" else if (rm.id == 2) "Gemini Prompting" else "Postgres database"
+                                    else -> "Completed!"
+                                }
+                                Toast.makeText(
+                                    context,
+                                    "To advance this path, open your editor, write $requiredLang code using '$currentStepName', and compile/run it in the sandbox!",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         )
                     }
 
@@ -2721,7 +3127,7 @@ fun RoadmapCard(techName: String, description: String, progress: Float, onClick:
                 if (progress >= 1.0f) {
                     Icon(imageVector = Icons.Filled.CheckCircle, contentDescription = "completed", tint = Color.Green, modifier = Modifier.size(20.dp))
                 } else {
-                    Text("Tap to continue", color = DarkPrimary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Complete in Sandbox 🚀", color = DarkPrimary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -3305,11 +3711,15 @@ fun CommunityScreen(
 fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
     val profile by viewModel.userProfile.collectAsState()
     val dailyMissionsList by viewModel.dailyMissions.collectAsState()
+    val registeredUsers by viewModel.registeredUsers.collectAsState()
 
     var isEditing by remember { mutableStateOf(false) }
     var usernameInput by remember { mutableStateOf("") }
     var emailInput by remember { mutableStateOf("") }
     var bioInput by remember { mutableStateOf("") }
+    
+    var showBioDialog by remember { mutableStateOf(false) }
+    var bioDialogInput by remember { mutableStateOf("") }
 
     val context = LocalContext.current
 
@@ -3332,8 +3742,18 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
             if (sizeInBytes > maxBytes) {
                 Toast.makeText(context, "Image is larger than 3MB. Please select a smaller photo!", Toast.LENGTH_LONG).show()
             } else {
-                viewModel.updateUserProfileAvatar(it.toString())
-                Toast.makeText(context, "Profile picture updated successfully! 📸", Toast.LENGTH_SHORT).show()
+                try {
+                    val pfpFile = java.io.File(context.filesDir, "custom_profile_picture.png")
+                    context.contentResolver.openInputStream(it)?.use { inputStream ->
+                        java.io.FileOutputStream(pfpFile).use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    viewModel.updateUserProfileAvatar(android.net.Uri.fromFile(pfpFile).toString())
+                    Toast.makeText(context, "Profile picture updated successfully! 📸", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Error saving profile picture: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -3407,18 +3827,56 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
             // USER CARD
             item {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .background(DarkPrimary.copy(alpha = 0.12f), CircleShape)
-                            .border(2.dp, DarkPrimary, CircleShape)
-                            .clickable {
-                                pickPfpLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    val isPremium = profile?.isPremium == true
+                    val infiniteTransition = rememberInfiniteTransition(label = "PremiumBorder")
+                    val rotationAngle by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 360f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(4000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "Rotation"
+                    )
+
+                    val premiumBorderModifier = if (isPremium) {
+                        Modifier
+                            .size(106.dp)
+                            .clip(CircleShape)
+                            .rotate(rotationAngle)
+                            .background(
+                                Brush.sweepGradient(
+                                    listOf(
+                                        Color(0xFFFFD700), // Gold
+                                        Color(0xFFFF8F00), // Amber
+                                        Color(0xFFFF00A0), // Neon Pink
+                                        Color(0xFF8B5CF6), // Royal Purple
+                                        Color(0xFF00FFD2), // Cyan
+                                        Color(0xFFFFD700)  // Gold
+                                    )
                                 )
-                            },
+                            )
+                            .padding(3.dp)
+                    } else {
+                        Modifier
+                    }
+
+                    Box(
+                        modifier = Modifier.then(premiumBorderModifier),
                         contentAlignment = Alignment.Center
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(100.dp)
+                                .background(if (isPremium) Color(0xFF13141F) else DarkPrimary.copy(alpha = 0.12f), CircleShape)
+                                .border(if (isPremium) 0.dp else 2.dp, if (isPremium) Color.Transparent else DarkPrimary, CircleShape)
+                                .clickable {
+                                    pickPfpLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
                         val pfpSeed = profile?.avatarSeed ?: ""
                         if (pfpSeed.startsWith("content://") || pfpSeed.startsWith("file://")) {
                             AsyncImage(
@@ -3437,6 +3895,7 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                                 modifier = Modifier.size(48.dp)
                             )
                         }
+                    }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
@@ -3487,12 +3946,26 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        Text(
-                            "@" + (profile?.username ?: "CoderGuest"),
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                "@" + (profile?.username ?: "CoderGuest"),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            if (profile?.isPremium == true) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Filled.Verified,
+                                    contentDescription = "Verified Premium Coder",
+                                    tint = Color(0xFFFFD700), // Premium Amber Gold Verified Badge
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(profile?.email ?: "guest@mistercodes.com", color = Color.Gray, fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(4.dp))
@@ -3502,13 +3975,61 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                         }
                         Text("Account Created On: $creationDateStr", color = Color.Gray.copy(alpha = 0.8f), fontSize = 11.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            profile?.bio ?: "No bio description set yet.",
-                            color = Color.LightGray,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .clickable {
+                                    bioDialogInput = profile?.bio ?: ""
+                                    showBioDialog = true
+                                }
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = profile?.bio ?: "No bio description set yet. Tap to add your tagline!",
+                                color = Color.LightGray,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Bio",
+                                tint = DarkPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = {
+                                val shareIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    type = "text/plain"
+                                    putExtra(
+                                        android.content.Intent.EXTRA_TEXT,
+                                        "🚀 Check out my developer profile on Mister Codes!\n\n" +
+                                        "Username: @${profile?.username ?: "developer"}\n" +
+                                        "Level: L${profile?.level ?: 1}\n" +
+                                        "Total XP Balance: ${formatXp(profile?.xp ?: 0.0)} XP\n" +
+                                        "Current Streak: ${profile?.currentStreak ?: 0} Days 🔥\n\n" +
+                                        "Join me in building sandboxed projects and conquering coding algorithms!"
+                                    )
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Developer Profile"))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary.copy(alpha = 0.15f), contentColor = DarkPrimary),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, DarkPrimary),
+                            modifier = Modifier.testTag("share_profile_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.Share, contentDescription = "Share Profile", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Share Profile Credentials", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -3528,16 +4049,41 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
 
                         Spacer(modifier = Modifier.height(16.dp))
 
+                        val userXp = profile?.xp ?: 0.0
+                        val totalUsersCount = registeredUsers.size + 1
+                        val allXps = (registeredUsers.map { it.xp } + userXp).sortedDescending()
+                        val userRank = allXps.indexOf(userXp) + 1
+                        val rankingLabel = if (totalUsersCount <= 1) {
+                            "Top 1st"
+                        } else {
+                            val percentile = (userRank.toDouble() / totalUsersCount.toDouble()) * 100.0
+                            if (percentile <= 10.0) {
+                                "Top 10% (#$userRank)"
+                            } else if (percentile <= 25.0) {
+                                "Top 25% (#$userRank)"
+                            } else if (percentile <= 50.0) {
+                                "Top 50% (#$userRank)"
+                            } else {
+                                "Top ${(percentile).toInt()}% (#$userRank)"
+                            }
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             ProfileStatItem(title = "Streaks", count = "${profile?.currentStreak ?: 0} Days")
                             ProfileStatItem(title = "Solved Tasks", count = "${profile?.solvedChallengesCount ?: 0}")
-                            ProfileStatItem(title = "XP Ranking", status = "Top 13%")
+                            ProfileStatItem(title = "XP Ranking", status = rankingLabel)
                         }
                     }
                 }
+            }
+
+            // PREMIUM PROFILE AND CRITERIA BOX
+            item {
+                Spacer(modifier = Modifier.height(14.dp))
+                PremiumProfileCriteriaCard(viewModel)
             }
 
             // MILESTONES SEC
@@ -3568,8 +4114,11 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (mission.isBadaProject) Color(0xFF261D11) else Color(0xFF151D30)
+                    ),
+                    border = if (mission.isBadaProject) BorderStroke(1.5.dp, Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFF8F00)))) else null
                 ) {
                     Row(
                         modifier = Modifier
@@ -3590,17 +4139,22 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Box(
                                         modifier = Modifier
-                                            .background(Color(0xFFFFB300).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                            .background(Color(0xFFFFD700).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
-                                        Text("EXCLUSIVE (HIGH XP) ⭐", color = Color(0xFFFFB300), fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text("PREMIUM STAR THEME ⭐", color = Color(0xFFFFD700), fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
                                     }
                                 }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(mission.description, color = Color.LightGray, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Reward: ${mission.xpReward} XP", color = DarkPrimary, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                            Text(
+                                text = if (mission.isBadaProject) "Reward: ${mission.xpReward} XP + 50% PREMIUM BONUS ⭐" else "Reward: ${mission.xpReward} XP",
+                                color = if (mission.isBadaProject) Color(0xFFFFC107) else DarkPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -3700,6 +4254,55 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
             }
         }
     }
+
+    if (showBioDialog) {
+        AlertDialog(
+            onDismissRequest = { showBioDialog = false },
+            title = { Text("Update Developer Bio", color = Color.White) },
+            text = {
+                Column {
+                    Text("Express your developer persona, tech stack, or compiler passions:", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = bioDialogInput,
+                        onValueChange = { bioDialogInput = it },
+                        label = { Text("Developer Bio / Tagline") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = DarkPrimary,
+                            focusedBorderColor = DarkPrimary
+                        ),
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateProfileDetails(
+                            profile?.username ?: "MisterCoder",
+                            profile?.email ?: "mistercodes@codes.com",
+                            bioDialogInput,
+                            profile?.avatarSeed
+                        )
+                        Toast.makeText(context, "Bio updated successfully! 🚀", Toast.LENGTH_SHORT).show()
+                        showBioDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary, contentColor = Color.Black)
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBioDialog = false }) {
+                    Text("Cancel", color = Color.LightGray)
+                }
+            },
+            containerColor = Color(0xFF151D30)
+        )
+    }
 }
 
 @Composable
@@ -3791,6 +4394,136 @@ fun SettingsScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // PERFORMANCE ENGINE DIAGNOSTICS CARD
+            item {
+                val context = LocalContext.current
+                val detectedRates = remember {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        try {
+                            val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                context.display
+                            } else {
+                                val wm = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+                                @Suppress("DEPRECATION")
+                                wm.defaultDisplay
+                            }
+                            val rates = display?.supportedModes?.map { "${it.refreshRate.toInt()}Hz" }?.distinct()?.sorted()
+                            if (rates.isNullOrEmpty()) listOf("60Hz", "90Hz", "120Hz", "144Hz") else rates
+                        } catch (e: Exception) {
+                            listOf("60Hz", "90Hz", "120Hz", "144Hz")
+                        }
+                    } else {
+                        listOf("60Hz")
+                    }
+                }
+
+                Text("Performance & Render Mode", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Speed,
+                                        contentDescription = "Speed",
+                                        tint = DarkPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        "144Hz Ultra-Smooth Mode",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    "Overrides standard 60 FPS limit to unlock high refresh rate",
+                                    color = Color.Gray,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .background(DarkPrimary.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                    .border(1.dp, DarkPrimary, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "ACTIVE",
+                                    color = DarkPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = Color.DarkGray.copy(alpha = 0.5f),
+                            thickness = 0.5.dp
+                        )
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    "Detected Hardware Refresh Rates",
+                                    color = Color.LightGray,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    detectedRates.forEach { rate ->
+                                        Box(
+                                            modifier = Modifier
+                                                .background(Color(0xFF070A13), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = rate,
+                                                color = if (rate.contains("90") || rate.contains("120") || rate.contains("144")) DarkPrimary else Color.Gray,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    "Render Pipeline",
+                                    color = Color.Gray,
+                                    fontSize = 10.sp
+                                )
+                                Text(
+                                    "Compose/Vsync",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // TEXT EDITOR PREFERENCE
             item {
                 Text("Editor Sandbox Workspace Configuration", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -4143,3 +4876,651 @@ data class Quadruple<out A, out B, out C, out D>(
 )
 
 fun <A, B, C, D> quadrupleOf(a: A, b: B, c: C, d: D): Quadruple<A, B, C, D> = Quadruple(a, b, c, d)
+
+@Composable
+fun TerminalLogsView(viewModel: MisterCodesViewModel) {
+    val activityLogs by viewModel.activityLogs.collectAsState()
+    
+    var startDate by remember { mutableStateOf<Long?>(null) }
+    var endDate by remember { mutableStateOf<Long?>(null) }
+    
+    val context = LocalContext.current
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    val displayTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+    
+    // Filter logs based on selection
+    val filteredLogs = remember(activityLogs, startDate, endDate) {
+        activityLogs.filter { log ->
+            val matchesStart = startDate == null || log.timestamp >= startDate!!
+            val matchesEnd = endDate == null || log.timestamp <= (endDate!! + 86400000L - 1)
+            matchesStart && matchesEnd
+        }
+    }
+    
+    // Stats for the selected period
+    val totalCount = filteredLogs.size
+    val compilesCount = filteredLogs.count { it.actionType == "COMPILE" }
+    val quizzesCount = filteredLogs.count { it.actionType == "QUIZ" }
+    val missionsCount = filteredLogs.count { it.actionType == "CLAIM_MISSION" }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF070A13))
+    ) {
+        // Date range select row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Start Date picker button
+            Button(
+                onClick = {
+                    val calendar = Calendar.getInstance()
+                    if (startDate != null) {
+                        calendar.timeInMillis = startDate!!
+                    }
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day ->
+                            val cal = Calendar.getInstance()
+                            cal.set(year, month, day, 0, 0, 0)
+                            cal.set(Calendar.MILLISECOND, 0)
+                            startDate = cal.timeInMillis
+                        },
+                        calendar.get(Calendar.YEAR),
+                        calendar.get(Calendar.MONTH),
+                        calendar.get(Calendar.DAY_OF_MONTH)
+                    ).show()
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF151D30), contentColor = Color.White),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Icon(imageVector = Icons.Default.CalendarToday, contentDescription = "Start Date", modifier = Modifier.size(16.dp), tint = DarkPrimary)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (startDate != null) dateFormat.format(startDate) else "From: All Time",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            
+            // End Date picker button
+            Button(
+                onClick = {
+                    val calendar = Calendar.getInstance()
+                    if (endDate != null) {
+                        calendar.timeInMillis = endDate!!
+                    }
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day ->
+                            val cal = Calendar.getInstance()
+                            cal.set(year, month, day, 0, 0, 0)
+                            cal.set(Calendar.MILLISECOND, 0)
+                            endDate = cal.timeInMillis
+                        },
+                        calendar.get(Calendar.YEAR),
+                        calendar.get(Calendar.MONTH),
+                        calendar.get(Calendar.DAY_OF_MONTH)
+                    ).show()
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF151D30), contentColor = Color.White),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Icon(imageVector = Icons.Default.CalendarToday, contentDescription = "End Date", modifier = Modifier.size(16.dp), tint = DarkPrimary)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (endDate != null) dateFormat.format(endDate) else "To: All Time",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            
+            // Reset filters button
+            if (startDate != null || endDate != null) {
+                IconButton(
+                    onClick = {
+                        startDate = null
+                        endDate = null
+                    },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(Color(0xFF23151D), RoundedCornerShape(10.dp))
+                ) {
+                    Icon(imageVector = Icons.Default.FilterListOff, contentDescription = "Clear Filters", tint = Color.Red, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        
+        // Stats Summary Dashboard Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1524)),
+            border = BorderStroke(0.5.dp, Color.DarkGray)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "PERIOD ACTIVITY DASHBOARD",
+                    style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DarkPrimary, letterSpacing = 1.sp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    PeriodStatItem(label = "Total Logs", value = "$totalCount", icon = Icons.Outlined.History, tint = Color.White)
+                    PeriodStatItem(label = "Compiles", value = "$compilesCount", icon = Icons.Outlined.Terminal, tint = Color.Green)
+                    PeriodStatItem(label = "Quizzes", value = "$quizzesCount", icon = Icons.Outlined.School, tint = Color.Cyan)
+                    PeriodStatItem(label = "Missions", value = "$missionsCount", icon = Icons.Outlined.MilitaryTech, tint = Color.Yellow)
+                }
+            }
+        }
+        
+        // Logs LazyList
+        if (filteredLogs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(vertical = 40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Outlined.HistoryToggleOff, contentDescription = "No Logs", tint = Color.DarkGray, modifier = Modifier.size(60.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("No terminal activities logged for this period.", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Perform compilations, claim missions, or solve academy challenges to see them listed here.", color = Color.DarkGray, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 20.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                items(filteredLogs) { log ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        // Left Timeline indicator column
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(32.dp)
+                        ) {
+                            val logColor = when (log.actionType) {
+                                "COMPILE" -> Color.Green
+                                "QUIZ" -> Color.Cyan
+                                "CHALLENGE" -> Color(0xFFFF9800)
+                                "CLAIM_MISSION" -> Color(0xFFFFD700)
+                                "PFP_CHANGE" -> Color(0xFFE040FB)
+                                "AUTH_SIGNUP" -> Color(0xFF00E5FF)
+                                "AUTH_LOGIN" -> Color(0xFF00E676)
+                                else -> Color.Gray
+                            }
+                            val logIcon = when (log.actionType) {
+                                "COMPILE" -> Icons.Outlined.Terminal
+                                "QUIZ" -> Icons.Outlined.School
+                                "CHALLENGE" -> Icons.Outlined.Code
+                                "CLAIM_MISSION" -> Icons.Outlined.MilitaryTech
+                                "PFP_CHANGE" -> Icons.Outlined.Face
+                                "AUTH_SIGNUP" -> Icons.Outlined.PersonAdd
+                                "AUTH_LOGIN" -> Icons.Outlined.VpnKey
+                                else -> Icons.Outlined.Info
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(logColor.copy(alpha = 0.15f), CircleShape)
+                                    .border(1.dp, logColor, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = logIcon,
+                                    contentDescription = log.actionType,
+                                    tint = logColor,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                            
+                            // Line connecting dots
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(44.dp)
+                                    .background(Color.DarkGray)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        // Card with log details
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val badgeLabel = when (log.actionType) {
+                                        "COMPILE" -> "COMPILE SANDBOX"
+                                        "QUIZ" -> "MCQ QUIZ SOLVED"
+                                        "CHALLENGE" -> "CODING TASK PASSED"
+                                        "CLAIM_MISSION" -> "MILESTONE CLAIMED"
+                                        "PFP_CHANGE" -> "PFP UPDATED"
+                                        "AUTH_SIGNUP" -> "ACCOUNT SIGNUP"
+                                        "AUTH_LOGIN" -> "TERMINAL LOGIN"
+                                        else -> log.actionType
+                                    }
+                                    val logColor = when (log.actionType) {
+                                        "COMPILE" -> Color.Green
+                                        "QUIZ" -> Color.Cyan
+                                        "CHALLENGE" -> Color(0xFFFF9800)
+                                        "CLAIM_MISSION" -> Color(0xFFFFD700)
+                                        "PFP_CHANGE" -> Color(0xFFE040FB)
+                                        "AUTH_SIGNUP" -> Color(0xFF00E5FF)
+                                        "AUTH_LOGIN" -> Color(0xFF00E676)
+                                        else -> Color.Gray
+                                    }
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .background(logColor.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(text = badgeLabel, color = logColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    
+                                    Text(
+                                        text = displayTimeFormat.format(log.timestamp),
+                                        color = Color.Gray,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(6.dp))
+                                
+                                Text(
+                                    text = log.description,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PeriodStatItem(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(4.dp)
+    ) {
+        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(text = label, color = Color.Gray, fontSize = 9.sp)
+    }
+}
+
+@Composable
+fun PremiumProfileCriteriaCard(viewModel: MisterCodesViewModel) {
+    val context = LocalContext.current
+    val profile by viewModel.userProfile.collectAsState()
+    val isPremium = profile?.isPremium == true
+    val currentLevel = profile?.level ?: 1
+    
+    // Eligibility criteria: level 25+
+    val isEligible = currentLevel >= 25
+    val has100Discount = currentLevel >= 100
+    val amountToPay = if (has100Discount) 42 else 49
+
+    var showCriteriaDialog by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("premium_profile_criteria_card"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPremium) Color(0xFF261D11) else Color(0xFF151D30)
+        ),
+        border = BorderStroke(
+            width = 1.5.dp,
+            color = if (isPremium) Color(0xFFFFD700) else Color(0xFF8B5CF6).copy(alpha = 0.4f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = "Premium Icon",
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Premium Profile & Criteria",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+                
+                if (isPremium) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFFFD700).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "ACTIVE ✅",
+                            color = Color(0xFFFFD700),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Activate a professional verified badge next to your username, an animated profile border, and an exquisite workspace theme change!",
+                color = Color.LightGray,
+                fontSize = 12.sp,
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                PremiumBenefitItem("⭐ Gold Verified badge next to your username")
+                PremiumBenefitItem("🌀 Rotating multi-color profile border animation")
+                PremiumBenefitItem("🎨 Complete app theme changes to premium gold & obsidian")
+                PremiumBenefitItem("💼 Lifetime premium membership for just ₹49")
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Minimal Fee: ${if (has100Discount) "₹42" else "₹49"} INR",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    if (has100Discount) {
+                        Text(
+                            text = "₹7 Discount applied for level 100+! 🎉",
+                            color = Color(0xFFFFD700),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    } else {
+                        Text(
+                            text = "Reach level 100 for ₹7 discount!",
+                            color = Color.Gray,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
+
+                if (isPremium) {
+                    Button(
+                        onClick = {
+                            Toast.makeText(context, "You are already a Premium Coder! Enjoy the Obsidian Theme 👑", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.DarkGray,
+                            contentColor = Color.LightGray
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(38.dp)
+                    ) {
+                        Text("Activated 👑", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            showCriteriaDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isEligible) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.3f),
+                            contentColor = if (isEligible) Color.Black else Color.Gray
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .height(38.dp)
+                            .testTag("activate_premium_btn")
+                    ) {
+                        Text("Activate", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCriteriaDialog) {
+        AlertDialog(
+            onDismissRequest = { showCriteriaDialog = false },
+            title = {
+                Text(
+                    text = "Premium Criteria Check",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "To activate premium, you must meet the professional development level criteria:",
+                        color = Color.LightGray,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Criterion 1: Level 25
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Required: Level 25+", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text("Your current level is $currentLevel", color = Color.Gray, fontSize = 11.sp)
+                        }
+
+                        if (isEligible) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Matched ✅", color = Color.Green, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Mismatch ❌", color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (isEligible) {
+                        Text(
+                            text = "Congratulations! You meet all requirements. Click NEXT to pay ₹$amountToPay and activate your premium status.",
+                            color = Color.Green.copy(alpha = 0.9f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        val levelsNeeded = 25 - currentLevel
+                        Text(
+                            text = "Criteria Mismatch! You need $levelsNeeded more levels to activate premium. Complete missions and tasks to level up!",
+                            color = Color(0xFFFF5252),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (isEligible) {
+                    Button(
+                        onClick = {
+                            showCriteriaDialog = false
+                            
+                            // Redirect to payment app using UPI Intent
+                            try {
+                                val upiUri = android.net.Uri.parse("upi://pay?pa=7847864721-3@ybl&pn=MisterCodes%20Premium&am=$amountToPay&cu=INR&tn=MisterCodes%20Premium%20Profile%20Upgrade")
+                                val upiIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, upiUri)
+                                context.startActivity(upiIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "No UPI payment app found, activating Premium directly for testing! 🚀", Toast.LENGTH_LONG).show()
+                            }
+                            
+                            // Instantly unlock premium so they get the amazing benefits!
+                            viewModel.activatePremiumStatus()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFD700),
+                            contentColor = Color.Black
+                        ),
+                        modifier = Modifier.testTag("criteria_next_btn")
+                    ) {
+                        Text("Next 🚀", fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = { showCriteriaDialog = false },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.DarkGray,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Dismiss")
+                    }
+                }
+            },
+            dismissButton = {
+                if (isEligible) {
+                    TextButton(onClick = { showCriteriaDialog = false }) {
+                        Text("Cancel", color = Color.LightGray)
+                    }
+                }
+            },
+            containerColor = Color(0xFF151D30)
+        )
+    }
+}
+
+@Composable
+fun PremiumBenefitItem(text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 1.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,
+            contentDescription = "Benefit Bullet",
+            tint = Color(0xFFFFD700),
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(text = text, color = Color.LightGray, fontSize = 11.sp)
+    }
+}
+
+data class TreeNode(
+    val path: String,          // full path if file, folder path if folder
+    val label: String,         // just folder/file name
+    val isFolder: Boolean,
+    val depth: Int
+)
+
+fun buildTreeNodes(paths: Set<String>): List<TreeNode> {
+    val nodes = mutableListOf<TreeNode>()
+    val seenFolders = mutableSetOf<String>()
+    
+    // Sort paths alphabetically so they are structured
+    val sortedPaths = paths.sorted()
+    
+    for (path in sortedPaths) {
+        val segments = path.split("/")
+        var currentPath = ""
+        
+        // Process parent directories
+        for (i in 0 until segments.size - 1) {
+            val folderLabel = segments[i]
+            currentPath = if (currentPath.isEmpty()) folderLabel else "$currentPath/$folderLabel"
+            
+            if (!seenFolders.contains(currentPath)) {
+                seenFolders.add(currentPath)
+                nodes.add(TreeNode(
+                    path = currentPath,
+                    label = folderLabel,
+                    isFolder = true,
+                    depth = i
+                ))
+            }
+        }
+        
+        // Process the file itself
+        val fileLabel = segments.last()
+        nodes.add(TreeNode(
+            path = path,
+            label = fileLabel,
+            isFolder = false,
+            depth = segments.size - 1
+        ))
+    }
+    return nodes
+}

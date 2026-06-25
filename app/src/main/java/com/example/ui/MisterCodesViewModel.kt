@@ -36,12 +36,46 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
     val userProfile: StateFlow<UserProfile?> = repository.userProfile
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val registeredUsers: StateFlow<List<RegisteredUser>> = repository.allRegisteredUsers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val activityLogs: StateFlow<List<UserActivityLog>> = repository.allActivityLogs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun addActivityLog(actionType: String, description: String) {
+        viewModelScope.launch {
+            repository.addActivityLog(actionType, description)
+        }
+    }
+
+    private val replacementMissionPool = listOf(
+        DailyMission(10, "Refactor JVM Memory", "Trace garbage collector references and clean dangling pointers in Sandbox.", 140),
+        DailyMission(11, "Optimize DB Indexes", "Write composite query indexes for heavy relational SQL tables.", 150),
+        DailyMission(12, "Design Custom UI Kit", "Create custom Material 3 themed components and primary action elements.", 120),
+        DailyMission(13, "Integrate AI Vision API", "Send a canvas mock layout to Mister Codes to explain visual UI errors.", 160),
+        DailyMission(14, "Unit Test Stateflows", "Ensure concurrent ViewModel states emit correct success states.", 130),
+        DailyMission(15, "Deploy Cloud Function", "Write a secure serverless microservice to serialize user metrics.", 140),
+        DailyMission(16, "Write Advanced RegExp", "Configure secure filters using complex regular expression pattern matching.", 110),
+        DailyMission(17, "Implement Binary Tree", "Traverse root nodes in-order recursively to find deep leaves.", 150),
+        DailyMission(18, "Solve Matrix Rotation", "Perform in-place 90 degree matrix rotation on nested arrays.", 160),
+        DailyMission(19, "Write Custom Shaders", "Design dark ambient glow gradients using Kotlin and Compose Canvas.", 130)
+    )
+
     // --- UI Active States ---
     private val _currentSelectedProject = MutableStateFlow<CodeProject?>(null)
     val currentSelectedProject = _currentSelectedProject.asStateFlow()
 
     private val _editorCodeText = MutableStateFlow("")
     val editorCodeText = _editorCodeText.asStateFlow()
+
+    private val _isMultiFileProject = MutableStateFlow(false)
+    val isMultiFileProject = _isMultiFileProject.asStateFlow()
+
+    private val _multiFileMap = MutableStateFlow<Map<String, String>>(emptyMap())
+    val multiFileMap = _multiFileMap.asStateFlow()
+
+    private val _selectedFilePath = MutableStateFlow("")
+    val selectedFilePath = _selectedFilePath.asStateFlow()
 
     private val _editorLanguage = MutableStateFlow("Python")
     val editorLanguage = _editorLanguage.asStateFlow()
@@ -276,19 +310,269 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
 
     // --- Business Actions ---
 
+    fun parseMultiFileCode(codeText: String): Boolean {
+        if (!codeText.trim().startsWith("{\"isMultiFile\":true")) {
+            _isMultiFileProject.value = false
+            _multiFileMap.value = emptyMap()
+            _selectedFilePath.value = ""
+            return false
+        }
+        return try {
+            val obj = org.json.JSONObject(codeText)
+            val filesObj = obj.getJSONObject("files")
+            val filesMap = mutableMapOf<String, String>()
+            val keys = filesObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                filesMap[key] = filesObj.getString(key)
+            }
+            val activePath = obj.optString("selectedFilePath", "")
+            _isMultiFileProject.value = true
+            _multiFileMap.value = filesMap
+            _selectedFilePath.value = activePath
+            _editorCodeText.value = filesMap[activePath] ?: ""
+            true
+        } catch (e: Exception) {
+            _isMultiFileProject.value = false
+            _multiFileMap.value = emptyMap()
+            _selectedFilePath.value = ""
+            false
+        }
+    }
+
     fun onProjectSelected(project: CodeProject) {
         _currentSelectedProject.value = project
-        _editorCodeText.value = project.code
         _editorLanguage.value = project.language
+        if (!parseMultiFileCode(project.code)) {
+            _editorCodeText.value = project.code
+        }
     }
 
     fun onEditorCodeChanged(newText: String) {
         _editorCodeText.value = newText
-        // Auto-save if enabled and a project is selected
-        val activeProj = _currentSelectedProject.value
-        if (autoSaveEnabled.value && activeProj != null) {
-            viewModelScope.launch {
-                repository.saveProject(activeProj.copy(code = newText, lastModified = System.currentTimeMillis()))
+        val activeProj = _currentSelectedProject.value ?: return
+        
+        viewModelScope.launch {
+            val codeToSave: String
+            if (_isMultiFileProject.value) {
+                val path = _selectedFilePath.value
+                val updatedMap = _multiFileMap.value.toMutableMap()
+                if (path.isNotEmpty()) {
+                    updatedMap[path] = newText
+                    _multiFileMap.value = updatedMap
+                }
+                
+                val obj = org.json.JSONObject()
+                obj.put("isMultiFile", true)
+                obj.put("selectedFilePath", path)
+                val filesObj = org.json.JSONObject()
+                for ((k, v) in updatedMap) {
+                    filesObj.put(k, v)
+                }
+                obj.put("files", filesObj)
+                codeToSave = obj.toString()
+            } else {
+                codeToSave = newText
+            }
+            
+            if (autoSaveEnabled.value) {
+                repository.saveProject(activeProj.copy(code = codeToSave, lastModified = System.currentTimeMillis()))
+            }
+        }
+    }
+
+    fun onSelectFile(path: String) {
+        val activeProj = _currentSelectedProject.value ?: return
+        val currentText = _editorCodeText.value
+        val pathBefore = _selectedFilePath.value
+        
+        val updatedMap = _multiFileMap.value.toMutableMap()
+        if (pathBefore.isNotEmpty()) {
+            updatedMap[pathBefore] = currentText
+        }
+        _multiFileMap.value = updatedMap
+        _selectedFilePath.value = path
+        _editorCodeText.value = updatedMap[path] ?: ""
+        
+        viewModelScope.launch {
+            val obj = org.json.JSONObject()
+            obj.put("isMultiFile", true)
+            obj.put("selectedFilePath", path)
+            val filesObj = org.json.JSONObject()
+            for ((k, v) in updatedMap) {
+                filesObj.put(k, v)
+            }
+            obj.put("files", filesObj)
+            
+            repository.saveProject(activeProj.copy(code = obj.toString(), lastModified = System.currentTimeMillis()))
+        }
+    }
+
+    fun addNewFileToProject(filePath: String, templateContent: String = "") {
+        val activeProj = _currentSelectedProject.value ?: return
+        if (!_isMultiFileProject.value) {
+            _isMultiFileProject.value = true
+            val initialMap = mapOf(
+                "main.py" to _editorCodeText.value,
+                filePath to templateContent
+            )
+            _multiFileMap.value = initialMap
+            _selectedFilePath.value = filePath
+            _editorCodeText.value = templateContent
+        } else {
+            val updatedMap = _multiFileMap.value.toMutableMap()
+            updatedMap[filePath] = templateContent
+            _multiFileMap.value = updatedMap
+            _selectedFilePath.value = filePath
+            _editorCodeText.value = templateContent
+        }
+        
+        viewModelScope.launch {
+            val obj = org.json.JSONObject()
+            obj.put("isMultiFile", true)
+            obj.put("selectedFilePath", _selectedFilePath.value)
+            val filesObj = org.json.JSONObject()
+            for ((k, v) in _multiFileMap.value) {
+                filesObj.put(k, v)
+            }
+            obj.put("files", filesObj)
+            
+            repository.saveProject(activeProj.copy(code = obj.toString(), lastModified = System.currentTimeMillis()))
+        }
+    }
+
+    fun deleteFileFromProject(filePath: String) {
+        val activeProj = _currentSelectedProject.value ?: return
+        if (!_isMultiFileProject.value) return
+        
+        val updatedMap = _multiFileMap.value.toMutableMap()
+        updatedMap.remove(filePath)
+        _multiFileMap.value = updatedMap
+        
+        if (_selectedFilePath.value == filePath) {
+            val nextPath = updatedMap.keys.firstOrNull() ?: ""
+            _selectedFilePath.value = nextPath
+            _editorCodeText.value = updatedMap[nextPath] ?: ""
+        }
+        
+        viewModelScope.launch {
+            val obj = org.json.JSONObject()
+            obj.put("isMultiFile", true)
+            obj.put("selectedFilePath", _selectedFilePath.value)
+            val filesObj = org.json.JSONObject()
+            for ((k, v) in _multiFileMap.value) {
+                filesObj.put(k, v)
+            }
+            obj.put("files", filesObj)
+            
+            repository.saveProject(activeProj.copy(code = obj.toString(), lastModified = System.currentTimeMillis()))
+        }
+    }
+
+    fun generateProjectStructure(templateName: String, customPrefix: String) {
+        viewModelScope.launch {
+            val files = mutableMapOf<String, String>()
+            val selectedPath: String
+            
+            val cleanPrefix = if (customPrefix.isBlank()) "" else {
+                if (customPrefix.trim().endsWith("/")) customPrefix.trim() else "${customPrefix.trim()}/"
+            }
+            val appPkg = if (customPrefix.isNotBlank()) customPrefix.trim().replace("/", ".") else "com.example.myapp"
+            
+            when (templateName) {
+                "Android (Jetpack Compose MVVM)" -> {
+                    val pfx = if (cleanPrefix.isEmpty()) "app/src/main/java/com/example/myapp/" else cleanPrefix
+                    selectedPath = "${pfx}MainActivity.kt"
+                    files["${pfx}MainActivity.kt"] = "package $appPkg\n\nimport android.os.Bundle\nimport androidx.activity.ComponentActivity\nimport androidx.activity.compose.setContent\nimport androidx.compose.foundation.layout.fillMaxSize\nimport androidx.compose.material3.MaterialTheme\nimport androidx.compose.material3.Surface\nimport androidx.compose.ui.Modifier\nimport $appPkg.ui.screens.HomeScreen\nimport $appPkg.ui.theme.MyAppTheme\n\nclass MainActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        setContent {\n            MyAppTheme {\n                Surface(\n                    modifier = Modifier.fillMaxSize(),\n                    color = MaterialTheme.colorScheme.background\n                ) {\n                    HomeScreen()\n                }\n            }\n        }\n    }\n}\n"
+                    files["${pfx}ui/theme/Theme.kt"] = "package $appPkg.ui.theme\n\nimport androidx.compose.foundation.isSystemInDarkTheme\nimport androidx.compose.material3.MaterialTheme\nimport androidx.compose.material3.darkColorScheme\nimport androidx.compose.material3.lightColorScheme\nimport androidx.compose.runtime.Composable\n\n@Composable\nfun MyAppTheme(\n    darkTheme: Boolean = isSystemInDarkTheme(),\n    content: @Composable () -> Unit\n) {\n    val colors = if (darkTheme) darkColorScheme() else lightColorScheme()\n    MaterialTheme(\n        colorScheme = colors,\n        content = content\n    )\n}\n"
+                    files["${pfx}ui/screens/HomeScreen.kt"] = "package $appPkg.ui.screens\n\nimport androidx.compose.foundation.layout.*\nimport androidx.compose.material3.*\nimport androidx.compose.runtime.*\nimport androidx.compose.ui.Alignment\nimport androidx.compose.ui.Modifier\nimport androidx.compose.ui.unit.dp\n\n@Composable\nfun HomeScreen() {\n    Box(\n        modifier = Modifier.fillMaxSize(),\n        contentAlignment = Alignment.Center\n    ) {\n        Column(horizontalAlignment = Alignment.CenterHorizontally) {\n            Text(\"Welcome to Android Jetpack Compose!\", style = MaterialTheme.typography.headlineMedium)\n            Spacer(modifier = Modifier.height(16.dp))\n            Button(onClick = {}) {\n                Text(\"Explore App\")\n            }\n        }\n    }\n}\n"
+                    files["${pfx}ui/viewmodel/HomeViewModel.kt"] = "package $appPkg.ui.viewmodel\n\nimport androidx.lifecycle.ViewModel\nimport kotlinx.coroutines.flow.MutableStateFlow\nimport kotlinx.coroutines.flow.asStateFlow\n\nclass HomeViewModel : ViewModel() {\n    private val _uiState = MutableStateFlow(\"Idle\")\n    val uiState = _uiState.asStateFlow()\n}\n"
+                    files["${pfx}data/model/User.kt"] = "package $appPkg.data.model\n\ndata class User(\n    val id: String,\n    val name: String,\n    val email: String\n)\n"
+                    files["${pfx}data/repository/UserRepository.kt"] = "package $appPkg.data.repository\n\nimport $appPkg.data.model.User\n\nclass UserRepository {\n    suspend fun fetchUser(): User {\n        return User(\"1\", \"Mister Coder\", \"mister@coder.com\")\n    }\n}\n"
+                }
+                "React SPA (Boilerplate)" -> {
+                    val pfx = if (cleanPrefix.isEmpty()) "src/" else cleanPrefix
+                    selectedPath = "${pfx}App.js"
+                    files["${pfx}index.js"] = "import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport './index.css';\nimport App from './App';\n\nconst root = ReactDOM.createRoot(document.getElementById('root'));\nroot.render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n);\n"
+                    files["${pfx}App.js"] = "import React from 'react';\nimport Header from './components/Header';\nimport Dashboard from './components/Dashboard';\nimport { AuthProvider } from './context/AuthContext';\n\nfunction App() {\n  return (\n    <AuthProvider>\n      <div className=\"app-container\">\n        <Header />\n        <main className=\"main-content\">\n          <Dashboard />\n        </main>\n      </div>\n    </AuthProvider>\n  );\n}\n\nexport default App;\n"
+                    files["${pfx}components/Header.jsx"] = "import React from 'react';\n\nfunction Header() {\n  return (\n    <header style={{ padding: '1rem', background: '#2c3e50', color: 'white' }}>\n      <h2>Developer Studio Dashboard</h2>\n    </header>\n  );\n}\n\nexport default Header;\n"
+                    files["${pfx}components/Dashboard.jsx"] = "import React from 'react';\n\nfunction Dashboard() {\n  return (\n    <div style={{ padding: '2rem' }}>\n      <h3>Workspace Statistics</h3>\n      <p>Welcome back! Code compilation sandbox is active and running.</p>\n    </div>\n  );\n}\n\nexport default Dashboard;\n"
+                    files["${pfx}context/AuthContext.js"] = "import React, { createContext, useState } from 'react';\n\nexport const AuthContext = createContext();\n\nexport function AuthProvider({ children }) {\n  const [user, setUser] = useState({ name: 'Guest Developer' });\n  return (\n    <AuthContext.Provider value={{ user, setUser }}>\n      {children}\n    </AuthContext.Provider>\n  );\n}\n"
+                    files["public/index.html"] = "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>React Workspace Boilerplate</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+                    files["package.json"] = "{\n  \"name\": \"react-boilerplate-workspace\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"react\": \"^18.2.0\",\n    \"react-dom\": \"^18.2.0\"\n  }\n}\n"
+                }
+                "Node.js Express & MongoDB" -> {
+                    val pfx = if (cleanPrefix.isEmpty()) "src/" else cleanPrefix
+                    selectedPath = "${pfx}app.js"
+                    files["${pfx}app.js"] = "const express = require('express');\nconst connectDB = require('./config/db');\nconst userRoutes = require('./routes/userRoutes');\nconst { errorHandler } = require('./middleware/auth');\n\nconst app = express();\napp.use(express.json());\n\nconnectDB();\n\napp.use('/api/users', userRoutes);\napp.use(errorHandler);\n\nconst PORT = process.env.PORT || 5000;\napp.listen(PORT, () => console.log(`Server running on port \${PORT}`));\n"
+                    files["${pfx}config/db.js"] = "const mongoose = require('mongoose');\n\nconst connectDB = async () => {\n  try {\n    console.log(\"MongoDB Connected to Cloud Sandbox...\");\n  } catch (err) {\n    console.error(err.message);\n    process.exit(1);\n  }\n};\n\nmodule.exports = connectDB;\n"
+                    files["${pfx}models/User.js"] = "const mongoose = require('mongoose');\n\nconst UserSchema = new mongoose.Schema({\n  name: { type: String, required: true },\n  email: { type: String, required: true, unique: true },\n  password: { type: String, required: true }\n});\n\nmodule.exports = mongoose.model('User', UserSchema);\n"
+                    files["${pfx}routes/userRoutes.js"] = "const express = require('express');\nconst router = express.Router();\nconst { registerUser } = require('../controllers/userController');\n\nrouter.post('/register', registerUser);\n\nmodule.exports = router;\n"
+                    files["${pfx}controllers/userController.js"] = "const registerUser = async (req, res) => {\n  const { name, email, password } = req.body;\n  res.status(201).json({\n    success: true,\n    user: { name, email }\n  });\n};\n\nmodule.exports = { registerUser };\n"
+                    files["${pfx}middleware/auth.js"] = "const protect = (req, res, next) => {\n  const token = req.headers.authorization;\n  if (!token) return res.status(401).json({ msg: 'Unauthorized' });\n  next();\n};\n\nconst errorHandler = (err, req, res, next) => {\n  res.status(500).json({ error: err.message });\n};\n\nmodule.exports = { protect, errorHandler };\n"
+                }
+                "FastAPI Python Backend" -> {
+                    val pfx = if (cleanPrefix.isEmpty()) "app/" else cleanPrefix
+                    selectedPath = "${pfx}main.py"
+                    files["${pfx}main.py"] = "from fastapi import FastAPI\nfrom app.api import endpoints\nfrom app.core.config import settings\n\napp = FastAPI(title=\"MisterCodes Python API Service\", version=\"1.0.0\")\n\napp.include_router(endpoints.router, prefix=\"/api/v1\")\n\n@app.get(\"/\")\ndef root():\n    return {\"message\": \"Welcome to FastAPI sandbox backend.\"}\n"
+                    files["${pfx}core/config.py"] = "class Settings:\n    PROJECT_NAME: str = \"FastAPI Sandbox\"\n    API_V1_STR: str = \"/api/v1\"\n    \nsettings = Settings()\n"
+                    files["${pfx}api/endpoints.py"] = "from fastapi import APIRouter\nfrom app.models.schemas import User\n\nrouter = APIRouter()\n\n@router.get(\"/users/me\", response_model=User)\ndef read_user():\n    return {\"id\": \"101\", \"name\": \"Python Coder\", \"email\": \"python@coder.com\"}\n"
+                    files["${pfx}models/schemas.py"] = "from pydantic import BaseModel\n\nclass User(BaseModel):\n    id: str\n    name: str\n    email: str\n"
+                    files["${pfx}database/session.py"] = "def get_db():\n    print(\"Initializing sqlite engine session...\")\n    try:\n        yield \"SessionActive\"\n    finally:\n        print(\"Closing session.\")\n"
+                    files["requirements.txt"] = "fastapi>=0.100.0\nuvicorn>=0.22.0\npydantic>=2.0\n"
+                }
+                "Go Clean Architecture" -> {
+                    selectedPath = "cmd/server/main.go"
+                    files["cmd/server/main.go"] = "package main\n\nimport (\n    \"fmt\"\n    \"net/http\"\n)\n\nfunc main() {\n    fmt.Println(\"Starting Clean Architecture Go Server on port 8080...\")\n    http.HandleFunc(\"/user\", func(w http.ResponseWriter, r *http.Request) {\n        w.Write([]byte(`{\"status\":\"success\",\"user\":\"Go Coder\"}`))\n    })\n    http.ListenAndServe(\":8080\", nil)\n}\n"
+                    files["internal/domain/user.go"] = "package domain\n\ntype User struct {\n    ID    string `json:\"id\"`\n    Name  string `json:\"name\"`\n    Email string `json:\"email\"`\n}\n"
+                    files["internal/repository/user_repo.go"] = "package repository\n\nimport \"internal/domain\"\n\ntype UserRepo struct{}\n\nfunc (r *UserRepo) FetchUser() domain.User {\n    return domain.User{ID: \"go_1\", Name: \"Golang Coder\", Email: \"go@coder.com\"}\n}\n"
+                    files["internal/usecase/user_usecase.go"] = "package usecase\n\nimport (\n    \"internal/domain\"\n    \"internal/repository\"\n)\n\ntype UserUsecase struct {\n    repo repository.UserRepo\n}\n\nfunc (u *UserUsecase) GetUser() domain.User {\n    return u.repo.FetchUser()\n}\n"
+                    files["internal/handler/user_handler.go"] = "package handler\n\nimport \"internal/usecase\"\n\ntype UserHandler struct {\n    uc usecase.UserUsecase\n}\n"
+                    files["go.mod"] = "module go-clean-arch-microservice\n\ngo 1.20\n"
+                }
+                else -> {
+                    selectedPath = "main.py"
+                    files["main.py"] = "# Code entry-point\nprint('Default workspace')\n"
+                }
+            }
+
+            val jsonObj = org.json.JSONObject()
+            jsonObj.put("isMultiFile", true)
+            jsonObj.put("selectedFilePath", selectedPath)
+            
+            val filesObj = org.json.JSONObject()
+            for ((k, v) in files) {
+                filesObj.put(k, v)
+            }
+            jsonObj.put("files", filesObj)
+
+            val serializedCode = jsonObj.toString()
+
+            val activeProj = _currentSelectedProject.value
+            if (activeProj != null) {
+                val updatedProj = activeProj.copy(code = serializedCode, language = when(templateName) {
+                    "Android (Jetpack Compose MVVM)" -> "Kotlin"
+                    "React SPA (Boilerplate)" -> "JavaScript"
+                    "Node.js Express & MongoDB" -> "JavaScript"
+                    "FastAPI Python Backend" -> "Python"
+                    "Go Clean Architecture" -> "Go"
+                    else -> "Python"
+                }, lastModified = System.currentTimeMillis())
+                repository.saveProject(updatedProj)
+                onProjectSelected(updatedProj)
+            } else {
+                val newId = repository.createNewProject("Scaffolded $templateName", when(templateName) {
+                    "Android (Jetpack Compose MVVM)" -> "Kotlin"
+                    "React SPA (Boilerplate)" -> "JavaScript"
+                    "Node.js Express & MongoDB" -> "JavaScript"
+                    "FastAPI Python Backend" -> "Python"
+                    "Go Clean Architecture" -> "Go"
+                    else -> "Python"
+                }, serializedCode)
+                val created = repository.getProjectById(newId.toInt())
+                if (created != null) {
+                    onProjectSelected(created)
+                }
             }
         }
     }
@@ -323,9 +607,14 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
         _isCompiling.value = true
         _consoleOutputResult.value = null
         viewModelScope.launch {
-            val output = repository.executeCodeWithCompileSimulator(_editorLanguage.value, _editorCodeText.value)
+            val currentLanguage = _editorLanguage.value
+            val currentCode = _editorCodeText.value
+            val output = repository.executeCodeWithCompileSimulator(currentLanguage, currentCode)
             _consoleOutputResult.value = output
             _isCompiling.value = false
+
+            // Check roadmap milestones based on actual sandbox code execution
+            checkRoadmapCodeExecution(currentLanguage, currentCode)
 
             // Mark Milestone 1 ("Console Pioneer")
             val profile = userProfile.value
@@ -333,7 +622,143 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                 repository.saveProfile(profile.copy(consolePioneered = true))
             }
             markMissionReadyToClaim(1)
+            addActivityLog("COMPILE", "Compiled and executed $currentLanguage project code in Sandbox compiler simulator.")
         }
+    }
+
+    fun checkRoadmapCodeExecution(language: String, code: String) {
+        val list = _roadmaps.value.map { rm ->
+            if (rm.isCompleted) return@map rm
+            
+            var advanced = false
+            var completedStepName = ""
+            var nextStepHint = ""
+            
+            when (rm.id) {
+                1 -> { // Mobile Junior Dev Kotlin
+                    if (language.equals("Kotlin", ignoreCase = true)) {
+                        when (rm.progress) {
+                            0.0f -> {
+                                if (code.contains("val ") || code.contains("var ")) {
+                                    advanced = true
+                                    completedStepName = "Step 1: Variables"
+                                    nextStepHint = "Next: Write code using Lists (e.g., 'listOf' or 'List')"
+                                }
+                            }
+                            0.25f -> {
+                                if (code.contains("List", ignoreCase = true) || code.contains("listOf") || code.contains("Array")) {
+                                    advanced = true
+                                    completedStepName = "Step 2: Lists"
+                                    nextStepHint = "Next: Write code using Flows & Coroutines (e.g., 'launch', 'delay', or 'Flow')"
+                                }
+                            }
+                            0.50f -> {
+                                if (code.contains("Flow") || code.contains("launch") || code.contains("delay") || code.contains("coroutine") || code.contains("GlobalScope")) {
+                                    advanced = true
+                                    completedStepName = "Step 3: Flows & Coroutines"
+                                    nextStepHint = "Next: Write code using UI Compose Components (e.g., '@Composable' or 'Button')"
+                                }
+                            }
+                            0.75f -> {
+                                if (code.contains("@Composable") || code.contains("Compose") || code.contains("Button") || code.contains("Text")) {
+                                    advanced = true
+                                    completedStepName = "Step 4: UI Compose Components"
+                                    nextStepHint = "Path Completed!"
+                                }
+                            }
+                        }
+                    }
+                }
+                2 -> { // Data Analyst Python
+                    if (language.equals("Python", ignoreCase = true)) {
+                        when (rm.progress) {
+                            0.0f -> {
+                                if (code.contains("numpy") || code.contains("np.")) {
+                                    advanced = true
+                                    completedStepName = "Step 1: Numpy maths"
+                                    nextStepHint = "Next: Write code using Pandas DataFrames (e.g., 'pandas' or 'DataFrame')"
+                                }
+                            }
+                            0.25f -> {
+                                if (code.contains("pandas") || code.contains("pd.") || code.contains("DataFrame")) {
+                                    advanced = true
+                                    completedStepName = "Step 2: Pandas DataFrames"
+                                    nextStepHint = "Next: Write code using Matplotlib plots (e.g., 'matplotlib' or 'plt.')"
+                                }
+                            }
+                            0.50f -> {
+                                if (code.contains("matplotlib") || code.contains("plt.")) {
+                                    advanced = true
+                                    completedStepName = "Step 3: Matplotlib plots"
+                                    nextStepHint = "Next: Write code using Gemini Prompting (e.g., 'gemini', 'prompt', or 'ai')"
+                                }
+                            }
+                            0.75f -> {
+                                if (code.contains("gemini") || code.contains("prompt") || code.contains("ai")) {
+                                    advanced = true
+                                    completedStepName = "Step 4: Gemini Prompting"
+                                    nextStepHint = "Path Completed!"
+                                }
+                            }
+                        }
+                    }
+                }
+                3 -> { // Full Stack JavaScript Web Developer
+                    if (language.equals("JavaScript", ignoreCase = true) || language.equals("TypeScript", ignoreCase = true)) {
+                        when (rm.progress) {
+                            0.0f -> {
+                                if (code.contains("document.") || code.contains("element") || code.contains("window")) {
+                                    advanced = true
+                                    completedStepName = "Step 1: DOM Elements"
+                                    nextStepHint = "Next: Write asynchronous requests (e.g., 'fetch' or 'Promise')"
+                                }
+                            }
+                            0.25f -> {
+                                if (code.contains("fetch") || code.contains("Promise")) {
+                                    advanced = true
+                                    completedStepName = "Step 2: Fetch & Promises"
+                                    nextStepHint = "Next: Create an Express REST API server (e.g., 'express' or 'app.get')"
+                                }
+                            }
+                            0.50f -> {
+                                if (code.contains("express") || code.contains("app.get") || code.contains("app.post")) {
+                                    advanced = true
+                                    completedStepName = "Step 3: Express REST API servers"
+                                    nextStepHint = "Next: Query Postgres database (e.g., 'postgres', 'sql', or 'SELECT')"
+                                }
+                            }
+                            0.75f -> {
+                                if (code.contains("postgres") || code.contains("pg") || code.contains("sql") || code.contains("SELECT")) {
+                                    advanced = true
+                                    completedStepName = "Step 4: Postgres database"
+                                    nextStepHint = "Path Completed!"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (advanced) {
+                val nextProgress = rm.progress + 0.25f
+                if (nextProgress >= 1.0f) {
+                    sendPushNotification(
+                        "🗺️ Roadmap Path Completed!",
+                        "Congratulations! You fully completed the '${rm.techName}' path in your project sandbox!"
+                    )
+                    rm.copy(progress = 1.0f, isCompleted = true)
+                } else {
+                    sendPushNotification(
+                        "🗺️ Roadmap Step Completed!",
+                        "Successfully unlocked '$completedStepName' for '${rm.techName}'! $nextStepHint"
+                    )
+                    rm.copy(progress = nextProgress)
+                }
+            } else {
+                rm
+            }
+        }
+        _roadmaps.value = list
     }
 
     // AI Chat Assistant operations
@@ -404,6 +829,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                 // Refresh active challenge state
                 _activeChallenge.value = challenge.copy(isCompleted = true, userSolution = "Selected option: $selected")
                 markMissionReadyToClaim(3)
+                addActivityLog("QUIZ", "Successfully solved Academy MCQ Quiz: '${challenge.title}'")
             }
         } else {
             _quizResultLabel.value = "Incorrect. Try reading the question again!"
@@ -427,6 +853,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                 repository.submitChallengeSolution(challenge.id, code, isCompleted = true)
                 _activeChallenge.value = challenge.copy(isCompleted = true, userSolution = code)
                 markMissionReadyToClaim(3)
+                addActivityLog("CHALLENGE", "Passed all unit tests and resolved coding problem: '${challenge.title}'")
             } else {
                 _quizResultLabel.value = "Failed! Error details:\n${res.errors.ifEmpty { "Output mismatch. Output: " + res.output + " but expected: " + testCaseInput }}"
             }
@@ -537,25 +964,47 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
 
     fun claimDailyMission(id: Int) {
         viewModelScope.launch {
-            val list = _dailyMissions.value.map {
-                if (it.id == id && !it.isCompleted && it.isReadyToClaim) {
-                    val reward = it.xpReward
-                    val profile = userProfile.value
-                    if (profile != null) {
-                        val newXp = profile.xp + reward
-                        val newLevel = (newXp / 100.0).toInt() + 1
-                        repository.saveProfile(profile.copy(xp = newXp, level = newLevel))
-                        sendPushNotification(
-                            "🏆 Milestone Achieved!",
-                            "Mission unlocked: '${it.title}', claimed $reward XP!"
-                        )
-                    }
-                    it.copy(isCompleted = true)
-                } else {
-                    it
+            var rewardClaimed = 0
+            var missionTitle = ""
+            val currentMissions = _dailyMissions.value
+            val nextMissions = currentMissions.toMutableList()
+
+            val idx = nextMissions.indexOfFirst { it.id == id && !it.isCompleted && it.isReadyToClaim }
+            if (idx != -1) {
+                val oldMission = nextMissions[idx]
+                rewardClaimed = oldMission.xpReward
+                missionTitle = oldMission.title
+
+                // Find a replacement mission from pool whose ID is not already used in currentMissions
+                val existingIds = nextMissions.map { it.id }.toSet()
+                val candidate = replacementMissionPool.firstOrNull { it.id !in existingIds }
+                    ?: DailyMission(
+                        id = oldMission.id + 100,
+                        title = "Extreme Coding Mastery",
+                        description = "Optimize complex relational queries in the active database.",
+                        xpReward = 180
+                    )
+
+                // Replace the mission at index with candidate
+                nextMissions[idx] = candidate
+
+                // Save Profile / Reward XP
+                val profile = userProfile.value
+                if (profile != null) {
+                    val newXp = profile.xp + rewardClaimed
+                    val newLevel = (newXp / 100.0).toInt() + 1
+                    repository.saveProfile(profile.copy(xp = newXp, level = newLevel))
+                    sendPushNotification(
+                        "🏆 Milestone Achieved!",
+                        "Finished: '$missionTitle', claimed $rewardClaimed XP! Replaced with: '${candidate.title}'"
+                    )
+                    addActivityLog(
+                        "CLAIM_MISSION",
+                        "Completed Daily Mission: '$missionTitle' and earned $rewardClaimed XP. Replaced with '${candidate.title}'"
+                    )
                 }
             }
-            _dailyMissions.value = list
+            _dailyMissions.value = nextMissions
         }
     }
 
@@ -582,6 +1031,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val ok = repository.registerNewUser(username, email, password)
             if (ok) {
+                addActivityLog("AUTH_SIGNUP", "Created new developer account with username @$username")
                 onSuccess()
             } else {
                 onError("This Email is already registered! Please log in instead.")
@@ -593,6 +1043,7 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val ok = repository.performLogin(emailOrUsername, password)
             if (ok) {
+                addActivityLog("AUTH_LOGIN", "Logged into system terminal securely as $emailOrUsername")
                 onSuccess()
             } else {
                 onError("Incorrect username/email or password!")
@@ -612,6 +1063,17 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val curr = userProfile.value ?: UserProfile()
             repository.updateProfileWithDetails(curr.username, curr.email, curr.bio, uriString)
+            addActivityLog("PFP_CHANGE", "Updated profile picture photo from device gallery")
+        }
+    }
+
+    fun activatePremiumStatus() {
+        viewModelScope.launch {
+            val curr = userProfile.value ?: UserProfile()
+            val updated = curr.copy(isPremium = true)
+            repository.saveProfile(updated)
+            addActivityLog("PREMIUM", "Activated Premium Profile package with dynamic theme, verified badge, and border animations!")
+            sendPushNotification("👑 Premium Profile Activated!", "Congratulations! You are now a Verified Premium Developer! 🚀")
         }
     }
 
