@@ -62,7 +62,19 @@ data class RegisteredUser(
     val aiGenerated: Boolean = false,
     val sharedSnippetPosted: Boolean = false,
     val consolePioneered: Boolean = false,
-    val isPremium: Boolean = false
+    val isPremium: Boolean = false,
+    val githubLink: String = "",
+    val instagramLink: String = "",
+    val gitProfileLink: String = "",
+    val linkedinLink: String = "",
+    val websiteLink: String = "",
+    val selectedAnimation: String = "None",
+    val isTrial: Boolean = false,
+    val trialEndsAt: Long = 0L,
+    val premiumTier: Int = 0,
+    val premiumExpiresAt: Long = 0L,
+    val premiumActivatedAt: Long = 0L,
+    val premiumIsCanceled: Boolean = false
 )
 
 @Entity(tableName = "user_profile")
@@ -84,7 +96,19 @@ data class UserProfile(
     val sharedSnippetPosted: Boolean = false,
     val consolePioneered: Boolean = false,
     val accountCreatedOn: Long = System.currentTimeMillis() - 86400 * 1000L * 2,
-    val isPremium: Boolean = false
+    val isPremium: Boolean = false,
+    val githubLink: String = "",
+    val instagramLink: String = "",
+    val gitProfileLink: String = "",
+    val linkedinLink: String = "",
+    val websiteLink: String = "",
+    val selectedAnimation: String = "None",
+    val isTrial: Boolean = false,
+    val trialEndsAt: Long = 0L,
+    val premiumTier: Int = 0,
+    val premiumExpiresAt: Long = 0L,
+    val premiumActivatedAt: Long = 0L,
+    val premiumIsCanceled: Boolean = false
 )
 
 @Entity(tableName = "activity_logs")
@@ -192,7 +216,7 @@ interface MisterCodesDao {
         RegisteredUser::class,
         UserActivityLog::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = false
 )
 abstract class MisterCodesDatabase : RoomDatabase() {

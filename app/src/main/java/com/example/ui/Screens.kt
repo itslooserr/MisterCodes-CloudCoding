@@ -3718,6 +3718,14 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
     var emailInput by remember { mutableStateOf("") }
     var bioInput by remember { mutableStateOf("") }
     
+    var githubInput by remember { mutableStateOf("") }
+    var instagramInput by remember { mutableStateOf("") }
+    var gitProfileInput by remember { mutableStateOf("") }
+    var linkedinInput by remember { mutableStateOf("") }
+    var websiteInput by remember { mutableStateOf("") }
+    var selectedAnimationInput by remember { mutableStateOf("None") }
+    var activeTabState by remember { mutableStateOf(0) }
+    
     var showBioDialog by remember { mutableStateOf(false) }
     var bioDialogInput by remember { mutableStateOf("") }
 
@@ -3763,6 +3771,12 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
             usernameInput = it.username
             emailInput = it.email
             bioInput = it.bio
+            githubInput = it.githubLink
+            instagramInput = it.instagramLink
+            gitProfileInput = it.gitProfileLink
+            linkedinInput = it.linkedinLink
+            websiteInput = it.websiteLink
+            selectedAnimationInput = it.selectedAnimation
         }
     }
 
@@ -3800,6 +3814,14 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                             return@TextButton
                         }
                         viewModel.updateProfileDetails(usernameInput, emailInput, bioInput)
+                        viewModel.updatePremiumProfile(
+                            github = githubInput,
+                            instagram = instagramInput,
+                            gitProfile = gitProfileInput,
+                            linkedin = linkedinInput,
+                            website = websiteInput,
+                            animation = selectedAnimationInput
+                        )
                         Toast.makeText(context, "Profile details updated successfully!", Toast.LENGTH_SHORT).show()
                         isEditing = false
                     } else {
@@ -3828,7 +3850,9 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
             item {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val isPremium = profile?.isPremium == true
+                    val selectedAnim = if (isEditing) selectedAnimationInput else (profile?.selectedAnimation ?: "Cosmic Rotate")
                     val infiniteTransition = rememberInfiniteTransition(label = "PremiumBorder")
+                    
                     val rotationAngle by infiniteTransition.animateFloat(
                         initialValue = 0f,
                         targetValue = 360f,
@@ -3839,24 +3863,211 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                         label = "Rotation"
                     )
 
+                    val pulseScale by infiniteTransition.animateFloat(
+                        initialValue = 1.0f,
+                        targetValue = 1.08f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1200, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "PulseScale"
+                    )
+
+                    val sparkleAngle by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = -360f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1500, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "Sparkle"
+                    )
+
+                    // Dynamic color shifts for Rainbow and Shimmer effects
+                    val shimmerShift by infiniteTransition.animateFloat(
+                        initialValue = -100f,
+                        targetValue = 300f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(2000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "Shimmer"
+                    )
+
                     val premiumBorderModifier = if (isPremium) {
-                        Modifier
-                            .size(106.dp)
-                            .clip(CircleShape)
-                            .rotate(rotationAngle)
-                            .background(
-                                Brush.sweepGradient(
-                                    listOf(
-                                        Color(0xFFFFD700), // Gold
-                                        Color(0xFFFF8F00), // Amber
-                                        Color(0xFFFF00A0), // Neon Pink
-                                        Color(0xFF8B5CF6), // Royal Purple
-                                        Color(0xFF00FFD2), // Cyan
-                                        Color(0xFFFFD700)  // Gold
+                        when (selectedAnim) {
+                            "None" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.2f))
+                                    .padding(3.dp)
+                            }
+                            "Cosmic Rotate" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .rotate(rotationAngle)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color(0xFFFFD700), // Gold
+                                                Color(0xFFFF8F00), // Amber
+                                                Color(0xFFFF00A0), // Neon Pink
+                                                Color(0xFF8B5CF6), // Royal Purple
+                                                Color(0xFF00FFD2), // Cyan
+                                                Color(0xFFFFD700)  // Gold
+                                            )
+                                        )
                                     )
-                                )
-                            )
-                            .padding(3.dp)
+                                    .padding(3.dp)
+                            }
+                            "Heartbeat Pulse" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .scale(pulseScale)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(Color(0xFFFF8F00), Color(0xFFFF00A0), Color.Transparent),
+                                            radius = 160f
+                                        )
+                                    )
+                                    .padding(4.dp)
+                            }
+                            "Cyber Sparkle" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .rotate(sparkleAngle)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color(0xFF00FFD2),
+                                                Color(0xFFFFD700),
+                                                Color(0xFF8B5CF6),
+                                                Color(0xFF00FFD2)
+                                            )
+                                        )
+                                    )
+                                    .padding(3.dp)
+                            }
+                            "Neon Glow" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .scale(pulseScale)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF3B82F6).copy(alpha = 0.6f))
+                                    .padding(4.dp)
+                            }
+                            "Matrix Fall" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .rotate(rotationAngle * 1.5f)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color(0xFF00FF00),
+                                                Color(0xFF003300),
+                                                Color(0xFF00FF00)
+                                            )
+                                        )
+                                    )
+                                    .padding(3.dp)
+                            }
+                            "Comet Trail" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .rotate(rotationAngle * 1.2f)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color(0xFFF43F5E), // comet head
+                                                Color(0xFFF43F5E).copy(alpha = 0.1f),
+                                                Color.Transparent
+                                            )
+                                        )
+                                    )
+                                    .padding(3.dp)
+                            }
+                            "Golden Shimmer" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFFFFD700).copy(alpha = 0.2f),
+                                                Color(0xFFFFFDD0),
+                                                Color(0xFFFFD700).copy(alpha = 0.2f)
+                                            ),
+                                            start = androidx.compose.ui.geometry.Offset(shimmerShift, shimmerShift),
+                                            end = androidx.compose.ui.geometry.Offset(shimmerShift + 100f, shimmerShift + 100f)
+                                        )
+                                    )
+                                    .padding(3.dp)
+                            }
+                            "Rainbow Orbit" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .rotate(rotationAngle * 2f)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red
+                                            )
+                                        )
+                                    )
+                                    .padding(3.dp)
+                            }
+                            "Quantum Wave" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .scale(1f + (pulseScale - 1f) * 0.8f)
+                                    .clip(CircleShape)
+                                    .rotate(sparkleAngle * 0.5f)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFF8B5CF6)
+                                            )
+                                        )
+                                    )
+                                    .padding(3.dp)
+                            }
+                            "Supernova" -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .scale(1.0f + (pulseScale - 1.0f) * 1.5f)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(Color(0xFFEF4444), Color(0xFFF59E0B), Color.Transparent),
+                                            radius = 200f
+                                        )
+                                    )
+                                    .padding(4.dp)
+                            }
+                            else -> {
+                                Modifier
+                                    .size(106.dp)
+                                    .clip(CircleShape)
+                                    .rotate(rotationAngle)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color(0xFFFFD700),
+                                                Color(0xFFFF8F00),
+                                                Color(0xFFFFD700)
+                                            )
+                                        )
+                                    )
+                                    .padding(3.dp)
+                            }
+                        }
                     } else {
                         Modifier
                     }
@@ -3945,6 +4156,97 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                             maxLines = 3,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Professional Developer Links", color = DarkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = githubInput,
+                            onValueChange = { githubInput = it },
+                            label = { Text("GitHub ID / Username") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = DarkPrimary, focusedBorderColor = DarkPrimary),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = instagramInput,
+                            onValueChange = { instagramInput = it },
+                            label = { Text("Instagram Username") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = DarkPrimary, focusedBorderColor = DarkPrimary),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = gitProfileInput,
+                            onValueChange = { gitProfileInput = it },
+                            label = { Text("Git Repo Profile ID/URL") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = DarkPrimary, focusedBorderColor = DarkPrimary),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = linkedinInput,
+                            onValueChange = { linkedinInput = it },
+                            label = { Text("LinkedIn ID/URL") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = DarkPrimary, focusedBorderColor = DarkPrimary),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = websiteInput,
+                            onValueChange = { websiteInput = it },
+                            label = { Text("Personal Website URL") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = DarkPrimary, focusedBorderColor = DarkPrimary),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Profile Border Animation Selection", color = DarkPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        
+                        if (profile?.isPremium == true) {
+                            val tier = profile?.premiumTier ?: 1
+                            val animOptions = when (tier) {
+                                1 -> listOf("None", "Cosmic Rotate", "Heartbeat Pulse")
+                                2 -> listOf("None", "Cosmic Rotate", "Heartbeat Pulse", "Cyber Sparkle", "Neon Glow", "Matrix Fall", "Comet Trail")
+                                3 -> listOf("None", "Cosmic Rotate", "Heartbeat Pulse", "Cyber Sparkle", "Neon Glow", "Matrix Fall", "Comet Trail", "Golden Shimmer", "Rainbow Orbit", "Quantum Wave", "Supernova")
+                                else -> listOf("None", "Cosmic Rotate", "Heartbeat Pulse")
+                            }
+                            animOptions.forEach { anim ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedAnimationInput = anim }
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = selectedAnimationInput == anim,
+                                        onClick = { selectedAnimationInput = anim },
+                                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFFFFD700))
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(anim, color = Color.White, fontSize = 14.sp)
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Filled.Lock, contentDescription = "Locked", tint = Color(0xFFFFD700), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Upgrade to Premium Profile to unlock selectable avatar border animations!", color = Color.LightGray, fontSize = 12.sp)
+                            }
+                        }
                     } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -3958,10 +4260,22 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                             )
                             if (profile?.isPremium == true) {
                                 Spacer(modifier = Modifier.width(6.dp))
+                                val badgeColor = when (profile?.premiumTier) {
+                                    1 -> Color.White
+                                    2 -> Color(0xFF3B82F6)
+                                    3 -> Color(0xFFFFD700)
+                                    else -> Color(0xFFFFD700)
+                                }
+                                val badgeDesc = when (profile?.premiumTier) {
+                                    1 -> "Silver Verified Trial"
+                                    2 -> "Blue Verified Temporary"
+                                    3 -> "Gold Verified Permanent"
+                                    else -> "Verified Premium"
+                                }
                                 Icon(
                                     imageVector = Icons.Filled.Verified,
-                                    contentDescription = "Verified Premium Coder",
-                                    tint = Color(0xFFFFD700), // Premium Amber Gold Verified Badge
+                                    contentDescription = badgeDesc,
+                                    tint = badgeColor,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -4034,60 +4348,221 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                 }
             }
 
-            // LEVEL PROGRESSION LARGE CARD
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
-                ) {
-                    Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("DEVELOPER ACCREDITATION", color = DarkPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text("Level ${profile?.level ?: 1}", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                        Text("Total XP Balance: ${formatXp(profile?.xp ?: 0.0)}", color = Color.LightGray, fontSize = 14.sp)
+            if (!isEditing) {
+                item {
+                    TabRow(
+                        selectedTabIndex = activeTabState,
+                        containerColor = Color.Transparent,
+                        contentColor = DarkPrimary
+                    ) {
+                        Tab(
+                            selected = activeTabState == 0,
+                            onClick = { activeTabState = 0 },
+                            text = { Text("Accreditation & Stats", fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                            selectedContentColor = DarkPrimary,
+                            unselectedContentColor = Color.Gray
+                        )
+                        Tab(
+                            selected = activeTabState == 1,
+                            onClick = { activeTabState = 1 },
+                            text = { Text("Social Links & Style", fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                            selectedContentColor = DarkPrimary,
+                            unselectedContentColor = Color.Gray
+                        )
+                    }
+                }
+            }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+            if (!isEditing && activeTabState == 0) {
+                // LEVEL PROGRESSION LARGE CARD
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30))
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("DEVELOPER ACCREDITATION", color = DarkPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("Level ${profile?.level ?: 1}", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                            Text("Total XP Balance: ${formatXp(profile?.xp ?: 0.0)}", color = Color.LightGray, fontSize = 14.sp)
 
-                        val userXp = profile?.xp ?: 0.0
-                        val totalUsersCount = registeredUsers.size + 1
-                        val allXps = (registeredUsers.map { it.xp } + userXp).sortedDescending()
-                        val userRank = allXps.indexOf(userXp) + 1
-                        val rankingLabel = if (totalUsersCount <= 1) {
-                            "Top 1st"
-                        } else {
-                            val percentile = (userRank.toDouble() / totalUsersCount.toDouble()) * 100.0
-                            if (percentile <= 10.0) {
-                                "Top 10% (#$userRank)"
-                            } else if (percentile <= 25.0) {
-                                "Top 25% (#$userRank)"
-                            } else if (percentile <= 50.0) {
-                                "Top 50% (#$userRank)"
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            val userXp = profile?.xp ?: 0.0
+                            val totalUsersCount = registeredUsers.size + 1
+                            val allXps = (registeredUsers.map { it.xp } + userXp).sortedDescending()
+                            val userRank = allXps.indexOf(userXp) + 1
+                            val rankingLabel = if (totalUsersCount <= 1) {
+                                "Top 1st"
                             } else {
-                                "Top ${(percentile).toInt()}% (#$userRank)"
+                                val percentile = (userRank.toDouble() / totalUsersCount.toDouble()) * 100.0
+                                if (percentile <= 10.0) {
+                                    "Top 10% (#$userRank)"
+                                } else if (percentile <= 25.0) {
+                                    "Top 25% (#$userRank)"
+                                } else if (percentile <= 50.0) {
+                                    "Top 50% (#$userRank)"
+                                } else {
+                                    "Top ${(percentile).toInt()}% (#$userRank)"
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                ProfileStatItem(title = "Streaks", count = "${profile?.currentStreak ?: 0} Days")
+                                ProfileStatItem(title = "Solved Tasks", count = "${profile?.solvedChallengesCount ?: 0}")
+                                ProfileStatItem(title = "XP Ranking", status = rankingLabel)
                             }
                         }
+                    }
+                }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            ProfileStatItem(title = "Streaks", count = "${profile?.currentStreak ?: 0} Days")
-                            ProfileStatItem(title = "Solved Tasks", count = "${profile?.solvedChallengesCount ?: 0}")
-                            ProfileStatItem(title = "XP Ranking", status = rankingLabel)
+                // PREMIUM PROFILE AND CRITERIA BOX
+                item {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    PremiumProfileCriteriaCard(viewModel)
+                }
+            }
+
+            if (!isEditing && activeTabState == 1) {
+                // SOCIAL LINKS LIST
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "DEVELOPER SOCIAL CHANNELS",
+                            color = Color(0xFFFFD700),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        
+                        val socialBadgeColor = if (profile?.isPremium == true) {
+                            when (profile?.premiumTier) {
+                                2 -> Color.White
+                                3 -> Color(0xFFFFD700)
+                                else -> null
+                            }
+                        } else null
+                        
+                        SocialLinkItem(icon = Icons.Filled.Code, label = "GitHub Developer ID", value = profile?.githubLink, badgeColor = socialBadgeColor) {
+                            val username = profile?.githubLink ?: ""
+                            if (username.isNotBlank()) {
+                                val url = if (username.startsWith("http")) username else "https://github.com/$username"
+                                try {
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not open link: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        SocialLinkItem(icon = Icons.Filled.PhotoCamera, label = "Instagram Username", value = profile?.instagramLink, badgeColor = socialBadgeColor) {
+                            val username = profile?.instagramLink ?: ""
+                            if (username.isNotBlank()) {
+                                val url = if (username.startsWith("http")) username else "https://instagram.com/$username"
+                                try {
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not open link: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        SocialLinkItem(icon = Icons.Filled.Folder, label = "Git Repository Profile", value = profile?.gitProfileLink, badgeColor = socialBadgeColor) {
+                            val url = profile?.gitProfileLink ?: ""
+                            if (url.isNotBlank()) {
+                                val correctUrl = if (url.startsWith("http")) url else "https://$url"
+                                try {
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(correctUrl)))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not open link: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        SocialLinkItem(icon = Icons.Filled.Business, label = "LinkedIn Profile URL", value = profile?.linkedinLink, badgeColor = socialBadgeColor) {
+                            val url = profile?.linkedinLink ?: ""
+                            if (url.isNotBlank()) {
+                                val correctUrl = if (url.startsWith("http")) url else "https://$url"
+                                try {
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(correctUrl)))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not open link: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        SocialLinkItem(icon = Icons.Filled.Language, label = "Personal Website Link", value = profile?.websiteLink, badgeColor = socialBadgeColor) {
+                            val url = profile?.websiteLink ?: ""
+                            if (url.isNotBlank()) {
+                                val correctUrl = if (url.startsWith("http")) url else "https://$url"
+                                try {
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(correctUrl)))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Could not open link: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ANIMATION STYLE PREVIEW
+                item {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30)),
+                        border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.2f))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "PREMIUM BORDER ANIMATION PREVIEW",
+                                color = Color(0xFFFFD700),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            val activeAnim = profile?.selectedAnimation ?: "None"
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (profile?.isPremium == true) Icons.Filled.Animation else Icons.Filled.Lock,
+                                    contentDescription = "Style selection",
+                                    tint = if (profile?.isPremium == true) Color(0xFFFFD700) else Color.Gray,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = if (profile?.isPremium == true) activeAnim else "Feature Locked 🔒",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (profile?.isPremium == true) "Selected animation style is active on your profile." else "Unlock premium to select from 3 spectacular avatar border animations in Edit mode!",
+                                        color = Color.LightGray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // PREMIUM PROFILE AND CRITERIA BOX
-            item {
-                Spacer(modifier = Modifier.height(14.dp))
-                PremiumProfileCriteriaCard(viewModel)
-            }
-
-            // MILESTONES SEC
-            item {
+            if (!isEditing && activeTabState == 0) {
+                // MILESTONES SEC
+                item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text("Achievement Milestones", color = Color.LightGray, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Spacer(modifier = Modifier.height(10.dp))
@@ -4212,6 +4687,8 @@ fun ProfileScreen(viewModel: MisterCodesViewModel, onBack: () -> Unit) {
                         }
                     }
                 }
+            }
+
             }
 
             // Logouts
@@ -5196,268 +5673,755 @@ fun PremiumProfileCriteriaCard(viewModel: MisterCodesViewModel) {
     val context = LocalContext.current
     val profile by viewModel.userProfile.collectAsState()
     val isPremium = profile?.isPremium == true
-    val currentLevel = profile?.level ?: 1
+    val activeTier = profile?.premiumTier ?: 0
+    val premiumIsCanceled = profile?.premiumIsCanceled == true
     
-    // Eligibility criteria: level 25+
-    val isEligible = currentLevel >= 25
-    val has100Discount = currentLevel >= 100
-    val amountToPay = if (has100Discount) 42 else 49
+    // Sandbox states from ViewModel
+    val simulatedLevel by viewModel.userLevelSimulated.collectAsState()
+    val simulatedStreak by viewModel.loginStreakSimulated.collectAsState()
+    val isFirstTimePurchase by viewModel.isFirstTimePurchase.collectAsState()
 
-    var showCriteriaDialog by remember { mutableStateOf(false) }
+    var showCheckoutDialog by remember { mutableStateOf(false) }
+    var selectedTierToPurchase by remember { mutableStateOf(1) } // 1: Trial, 2: Temp, 3: Perm
+    var transactionIdInput by remember { mutableStateOf("") }
+    var utrNumberInput by remember { mutableStateOf("") }
 
-    Card(
+    // Countdown and progress ticking
+    var timeRemainingText by remember { mutableStateOf("") }
+    var timelineProgress by remember { mutableStateOf(0f) }
+    
+    val expiresAt = profile?.premiumExpiresAt ?: 0L
+    val activatedAt = profile?.premiumActivatedAt ?: 0L
+
+    LaunchedEffect(expiresAt, activatedAt, activeTier) {
+        while (true) {
+            val now = System.currentTimeMillis()
+            if (expiresAt > 0L && now < expiresAt) {
+                val totalDuration = expiresAt - activatedAt
+                val elapsed = now - activatedAt
+                timelineProgress = if (totalDuration > 0) 1f - (elapsed.toFloat() / totalDuration) else 0f
+                
+                val diffMs = expiresAt - now
+                val days = diffMs / (24 * 3600 * 1000L)
+                val hours = (diffMs % (24 * 3600 * 1000L)) / (3600 * 1000L)
+                val minutes = (diffMs % (3600 * 1000L)) / (60 * 1000L)
+                val seconds = (diffMs % (60 * 1000L)) / 1000L
+                
+                timeRemainingText = if (days > 0) {
+                    "${days}d ${hours}h ${minutes}m remaining"
+                } else {
+                    String.format("%02d:%02d:%02d remaining", hours, minutes, seconds)
+                }
+            } else {
+                timelineProgress = 0f
+                timeRemainingText = if (activeTier == 3) "Lifetime Access Active 👑" else "Not Active"
+            }
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("premium_profile_criteria_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isPremium) Color(0xFF261D11) else Color(0xFF151D30)
-        ),
-        border = BorderStroke(
-            width = 1.5.dp,
-            color = if (isPremium) Color(0xFFFFD700) else Color(0xFF8B5CF6).copy(alpha = 0.4f)
-        )
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+        // ACTIVE PREMIUM STATUS (IF ACTIVE)
+        if (isPremium) {
+            val tierName = when (activeTier) {
+                1 -> "Silver Trial"
+                2 -> "Blue Temporary"
+                3 -> "Gold Permanent"
+                else -> "Premium"
+            }
+            val tierColor = when (activeTier) {
+                1 -> Color.White
+                2 -> Color(0xFF3B82F6)
+                3 -> Color(0xFFFFD700)
+                else -> Color(0xFFFFD700)
+            }
+            
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("active_premium_status_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF131524)),
+                border = BorderStroke(1.5.dp, tierColor)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        contentDescription = "Premium Icon",
-                        tint = Color(0xFFFFD700),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Premium Profile & Criteria",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-                
-                if (isPremium) {
-                    Box(
-                        modifier = Modifier
-                            .background(Color(0xFFFFD700).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "ACTIVE ✅",
-                            color = Color(0xFFFFD700),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Verified,
+                                contentDescription = "Verified Badge",
+                                tint = tierColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Active subscription: $tierName Tier",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        if (premiumIsCanceled) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color.Red.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("CANCELED", color = Color.Red, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color.Green.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("ACTIVE ✅", color = Color.Green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = "Activate a professional verified badge next to your username, an animated profile border, and an exquisite workspace theme change!",
-                color = Color.LightGray,
-                fontSize = 12.sp,
-                lineHeight = 16.sp
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                PremiumBenefitItem("⭐ Gold Verified badge next to your username")
-                PremiumBenefitItem("🌀 Rotating multi-color profile border animation")
-                PremiumBenefitItem("🎨 Complete app theme changes to premium gold & obsidian")
-                PremiumBenefitItem("💼 Lifetime premium membership for just ₹49")
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Minimal Fee: ${if (has100Discount) "₹42" else "₹49"} INR",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    if (has100Discount) {
+                    if (activeTier in listOf(1, 2)) {
                         Text(
-                            text = "₹7 Discount applied for level 100+! 🎉",
-                            color = Color(0xFFFFD700),
-                            fontSize = 10.sp,
+                            text = timeRemainingText,
+                            color = Color.LightGray,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // Progress bar visual timeline
+                        LinearProgressIndicator(
+                            progress = { timelineProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = tierColor,
+                            trackColor = Color.White.copy(alpha = 0.1f)
                         )
                     } else {
                         Text(
-                            text = "Reach level 100 for ₹7 discount!",
-                            color = Color.Gray,
-                            fontSize = 9.sp
+                            text = "Permanent Lifetime Gold design & all 11 border animations active!",
+                            color = Color.LightGray,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Cancellation and Refund Area
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            val refundRule = when (activeTier) {
+                                1 -> "Silver Trial: Non-refundable."
+                                2 -> "Blue Subscription: 25% refundable if canceled."
+                                3 -> "Gold Permanent: 89% refund within 90 days."
+                                else -> ""
+                            }
+                            Text(text = refundRule, color = Color.Gray, fontSize = 10.sp)
+                        }
+                        
+                        if (activeTier == 2 && premiumIsCanceled) {
+                            Button(
+                                onClick = { viewModel.reactivatePremiumTier() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Reactivate", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            var showConfirmCancel by remember { mutableStateOf(false) }
+                            if (showConfirmCancel) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton(
+                                        onClick = { showConfirmCancel = false },
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text("Back", color = Color.LightGray, fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            viewModel.cancelPremiumTier()
+                                            showConfirmCancel = false
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text("Confirm Cancel", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Button(
+                                    onClick = { showConfirmCancel = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text("Cancel Plan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // SANDBOX VARIABLES INTERACTIVE DEVELOPER CONSOLE
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("js_sandbox_simulator_console"),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+            border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "🛠️ Sandbox Simulator Console (Dummy JS State)",
+                    color = Color(0xFF3B82F6),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Simulate state parameters to instantly verify locked or unlocked states of each tier.",
+                    color = Color.LightGray,
+                    fontSize = 10.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Level state
+                    Column {
+                        Text("Simulated userLevel", color = Color.Gray, fontSize = 10.sp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            IconButton(
+                                onClick = { if (simulatedLevel > 1) viewModel.userLevelSimulated.value = simulatedLevel - 1 },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Text("-", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                            }
+                            Text("$simulatedLevel", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            IconButton(
+                                onClick = { if (simulatedLevel < 300) viewModel.userLevelSimulated.value = simulatedLevel + 1 },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Text("+", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                            }
+                        }
+                    }
+
+                    // Streak state
+                    Column {
+                        Text("Simulated loginStreak", color = Color.Gray, fontSize = 10.sp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            IconButton(
+                                onClick = { if (simulatedStreak > 0) viewModel.loginStreakSimulated.value = simulatedStreak - 1 },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Text("-", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                            }
+                            Text("$simulatedStreak Days", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            IconButton(
+                                onClick = { if (simulatedStreak < 30) viewModel.loginStreakSimulated.value = simulatedStreak + 1 },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Text("+", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                            }
+                        }
+                    }
+
+                    // First-Time toggle
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("First Purchase Offer", color = Color.Gray, fontSize = 10.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Switch(
+                            checked = isFirstTimePurchase,
+                            onCheckedChange = { viewModel.isFirstTimePurchase.value = it },
+                            modifier = Modifier.scale(0.8f)
                         )
                     }
                 }
+            }
+        }
 
-                if (isPremium) {
-                    Button(
-                        onClick = {
-                            Toast.makeText(context, "You are already a Premium Coder! Enjoy the Obsidian Theme 👑", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.DarkGray,
-                            contentColor = Color.LightGray
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(38.dp)
-                    ) {
-                        Text("Activated 👑", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            showCriteriaDialog = true
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isEligible) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.3f),
-                            contentColor = if (isEligible) Color.Black else Color.Gray
-                        ),
-                        shape = RoundedCornerShape(8.dp),
+        // SLIDING CARD VIEW ON PROFILE TAB SHOWING PLANS DETAIL
+        Column {
+            Text(
+                text = "Premium Sliding Subscription Tiers",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Tier 1: Trial (Silver Theme)
+                item {
+                    val price = if (isFirstTimePurchase) 9 else 11
+                    val hasFirstTimeDisc = isFirstTimePurchase
+                    
+                    Card(
                         modifier = Modifier
-                            .height(38.dp)
-                            .testTag("activate_premium_btn")
+                            .width(260.dp)
+                            .testTag("tier_silver_trial_card"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                        border = BorderStroke(1.5.dp, Color(0xFF94A3B8)) // Silver color
                     ) {
-                        Text("Activate", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Trial Tier (Silver)", color = Color(0xFFE2E8F0), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFF94A3B8).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Silver", color = Color(0xFFE2E8F0), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Duration: 24 hours",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Price: ₹$price",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                )
+                                if (hasFirstTimeDisc) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "₹11",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "(-₹2)",
+                                        color = Color.Green,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                PremiumBenefitItem("▫️ White verified profile badge")
+                                PremiumBenefitItem("▫️ Unlocks 3 border animations")
+                                PremiumBenefitItem("▫️ +5% extra XP progression")
+                                PremiumBenefitItem("▫️ Cancel anytime, non-refundable")
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            
+                            Button(
+                                onClick = {
+                                    selectedTierToPurchase = 1
+                                    showCheckoutDialog = true
+                                },
+                                enabled = !isPremium,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF94A3B8),
+                                    contentColor = Color.Black,
+                                    disabledContainerColor = Color.Gray.copy(alpha = 0.2f),
+                                    disabledContentColor = Color.DarkGray
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                            ) {
+                                Text("Activate Silver", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // Tier 2: Temporary (Standard/Blue Theme)
+                item {
+                    val meetsCriteria = simulatedLevel >= 50 && simulatedStreak >= 5
+                    val price = if (isFirstTimePurchase) 25 else 29
+                    val durationLabel = if (isFirstTimePurchase) "45 Days (includes 15 days bonus)" else "30 Days (1 month)"
+                    
+                    Card(
+                        modifier = Modifier
+                            .width(260.dp)
+                            .testTag("tier_blue_temporary_card"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                        border = BorderStroke(1.5.dp, Color(0xFF3B82F6)) // Blue color
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Temporary Tier (Blue)", color = Color(0xFF93C5FD), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            if (meetsCriteria) Color(0xFF3B82F6).copy(alpha = 0.2f) else Color.Red.copy(alpha = 0.2f),
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (meetsCriteria) "Eligible" else "Locked",
+                                        color = if (meetsCriteria) Color(0xFF60A5FA) else Color(0xFFF87171),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Duration: $durationLabel",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Price: ₹$price",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                )
+                                if (isFirstTimePurchase) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "₹29",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "+15 days bonus",
+                                        color = Color.Green,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                PremiumBenefitItem("▫️ Blue verified profile badge")
+                                PremiumBenefitItem("▫️ White verified social link badges")
+                                PremiumBenefitItem("▫️ Unlocks 7 border animations")
+                                PremiumBenefitItem("▫️ +25% extra XP progression")
+                                PremiumBenefitItem("▫️ Requirements: Level 50+ & 5d streak")
+                                PremiumBenefitItem("▫️ Cancel anytime, 25% refundable")
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            
+                            Button(
+                                onClick = {
+                                    selectedTierToPurchase = 2
+                                    showCheckoutDialog = true
+                                },
+                                enabled = meetsCriteria && !isPremium,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF3B82F6),
+                                    contentColor = Color.White,
+                                    disabledContainerColor = Color.Gray.copy(alpha = 0.1f),
+                                    disabledContentColor = Color.DarkGray
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                            ) {
+                                val buttonText = if (meetsCriteria) "Activate Blue" else "Locked 🔒"
+                                Text(buttonText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // Tier 3: Permanent (Gold Theme)
+                item {
+                    val meetsCriteria = simulatedLevel >= 25
+                    val goldPrice = if (simulatedLevel >= 100) 42 else 49
+                    val requirementLabel = if (simulatedLevel >= 100) "Level 100+ Elite Price Unlocked!" else "Level 25+ Basic Price Unlocked!"
+                    
+                    Card(
+                        modifier = Modifier
+                            .width(260.dp)
+                            .testTag("tier_gold_permanent_card"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                        border = BorderStroke(1.5.dp, Color(0xFFFFD700)) // Gold color
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Permanent Tier (Gold)", color = Color(0xFFFDE047), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            if (meetsCriteria) Color(0xFFFFD700).copy(alpha = 0.2f) else Color.Red.copy(alpha = 0.2f),
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (meetsCriteria) "Eligible" else "Locked",
+                                        color = if (meetsCriteria) Color(0xFFFDE047) else Color(0xFFF87171),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Duration: Lifetime Access",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Price: ₹$goldPrice",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (goldPrice == 42) "Lvl 100 Discount" else "Lvl 25 Standard",
+                                    color = Color.Green,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                PremiumBenefitItem("▫️ Gold verified profile badge")
+                                PremiumBenefitItem("▫️ Gold verified social link badges")
+                                PremiumBenefitItem("▫️ Unlocks ALL 11 border animations")
+                                PremiumBenefitItem("▫️ +50% extra XP progression")
+                                PremiumBenefitItem("▫️ $requirementLabel")
+                                PremiumBenefitItem("▫️ Complete app theme changes to Gold")
+                                PremiumBenefitItem("▫️ Cancel within 3m, 89% refundable")
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            
+                            Button(
+                                onClick = {
+                                    selectedTierToPurchase = 3
+                                    showCheckoutDialog = true
+                                },
+                                enabled = meetsCriteria && !isPremium,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFFD700),
+                                    contentColor = Color.Black,
+                                    disabledContainerColor = Color.Gray.copy(alpha = 0.1f),
+                                    disabledContentColor = Color.DarkGray
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                            ) {
+                                val buttonText = if (meetsCriteria) "Activate Gold 👑" else "Locked 🔒 (Lvl 25+)"
+                                Text(buttonText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    if (showCriteriaDialog) {
+    // CHECKOUT DIALOG WITH INTEGRATED UPI AND VERIFICATION
+    if (showCheckoutDialog) {
+        val tierName = when (selectedTierToPurchase) {
+            1 -> "Silver Trial Tier"
+            2 -> "Blue Temporary Tier"
+            3 -> "Gold Permanent Tier"
+            else -> ""
+        }
+        val price = when (selectedTierToPurchase) {
+            1 -> if (isFirstTimePurchase) 9 else 11
+            2 -> if (isFirstTimePurchase) 25 else 29
+            3 -> if (simulatedLevel >= 100) 42 else 49
+            else -> 0
+        }
+
         AlertDialog(
-            onDismissRequest = { showCriteriaDialog = false },
+            onDismissRequest = {
+                showCheckoutDialog = false
+                transactionIdInput = ""
+                utrNumberInput = ""
+            },
             title = {
                 Text(
-                    text = "Premium Criteria Check",
+                    text = "Pay & Activate $tierName",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
             },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "To activate premium, you must meet the professional development level criteria:",
+                        text = "1. Make Payment of ₹$price via UPI App to active professional perks instantly:",
                         color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "UPI ID: 7847864721-3@ybl",
+                        color = Color(0xFFFFD700),
                         fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        fontWeight = FontWeight.SemiBold
                     )
 
-                    // Criterion 1: Level 25
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(8.dp))
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Required: Level 25+", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                            Text("Your current level is $currentLevel", color = Color.Gray, fontSize = 11.sp)
-                        }
-
-                        if (isEligible) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Matched ✅", color = Color.Green, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Mismatch ❌", color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    if (isEligible) {
-                        Text(
-                            text = "Congratulations! You meet all requirements. Click NEXT to pay ₹$amountToPay and activate your premium status.",
-                            color = Color.Green.copy(alpha = 0.9f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    } else {
-                        val levelsNeeded = 25 - currentLevel
-                        Text(
-                            text = "Criteria Mismatch! You need $levelsNeeded more levels to activate premium. Complete missions and tasks to level up!",
-                            color = Color(0xFFFF5252),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                if (isEligible) {
                     Button(
                         onClick = {
-                            showCriteriaDialog = false
-                            
-                            // Redirect to payment app using UPI Intent
                             try {
-                                val upiUri = android.net.Uri.parse("upi://pay?pa=7847864721-3@ybl&pn=MisterCodes%20Premium&am=$amountToPay&cu=INR&tn=MisterCodes%20Premium%20Profile%20Upgrade")
+                                val upiUri = android.net.Uri.parse("upi://pay?pa=7847864721-3@ybl&pn=MisterCodes%20Premium&am=$price&cu=INR&tn=MisterCodes%20Premium%20Upgrade")
                                 val upiIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, upiUri)
                                 context.startActivity(upiIntent)
                             } catch (e: Exception) {
-                                Toast.makeText(context, "No UPI payment app found, activating Premium directly for testing! 🚀", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "UPI ID copied to clipboard! Pay via any UPI App.", Toast.LENGTH_LONG).show()
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("UPI ID", "7847864721-3@ybl"))
                             }
-                            
-                            // Instantly unlock premium so they get the amazing benefits!
-                            viewModel.activatePremiumStatus()
                         },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFFD700),
-                            contentColor = Color.Black
-                        ),
-                        modifier = Modifier.testTag("criteria_next_btn")
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700).copy(0.15f), contentColor = Color(0xFFFFD700)),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
                     ) {
-                        Text("Next 🚀", fontWeight = FontWeight.Bold)
+                        Text("🔗 Pay ₹$price via UPI App", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
-                } else {
-                    Button(
-                        onClick = { showCriteriaDialog = false },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.DarkGray,
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Text("Dismiss")
-                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "2. Enter Verification Details:",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    OutlinedTextField(
+                        value = transactionIdInput,
+                        onValueChange = { transactionIdInput = it },
+                        label = { Text("Transaction ID / UPI ID") },
+                        placeholder = { Text("e.g. TXN1029482") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = Color(0xFFFFD700), focusedBorderColor = Color(0xFFFFD700)),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = utrNumberInput,
+                        onValueChange = { utrNumberInput = it },
+                        label = { Text("12-Digit UTR Number") },
+                        placeholder = { Text("e.g. 123456789012") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = Color(0xFFFFD700), focusedBorderColor = Color(0xFFFFD700)),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.activatePremiumTier(selectedTierToPurchase, transactionIdInput, utrNumberInput)
+                        Toast.makeText(context, "$tierName activated! 👑", Toast.LENGTH_LONG).show()
+                        showCheckoutDialog = false
+                        transactionIdInput = ""
+                        utrNumberInput = ""
+                    },
+                    enabled = transactionIdInput.isNotBlank() && utrNumberInput.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFD700),
+                        contentColor = Color.Black,
+                        disabledContainerColor = Color.Gray.copy(alpha = 0.4f),
+                        disabledContentColor = Color.Gray
+                    ),
+                    modifier = Modifier.testTag("verify_activate_btn")
+                ) {
+                    Text("Verify & Activate 👑", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                if (isEligible) {
-                    TextButton(onClick = { showCriteriaDialog = false }) {
-                        Text("Cancel", color = Color.LightGray)
+                TextButton(
+                    onClick = {
+                        showCheckoutDialog = false
+                        transactionIdInput = ""
+                        utrNumberInput = ""
                     }
+                ) {
+                    Text("Cancel", color = Color.LightGray)
                 }
             },
-            containerColor = Color(0xFF151D30)
+            containerColor = Color(0xFF1E293B)
         )
     }
 }
@@ -5476,6 +6440,67 @@ fun PremiumBenefitItem(text: String) {
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(text = text, color = Color.LightGray, fontSize = 11.sp)
+    }
+}
+
+@Composable
+fun SocialLinkItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String?,
+    badgeColor: Color? = null,
+    onClick: () -> Unit
+) {
+    val isLinked = !value.isNullOrBlank()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(alpha = 0.04f))
+            .clickable(enabled = isLinked, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (isLinked) Color(0xFFFFD700) else Color.Gray,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(text = label, color = Color.Gray, fontSize = 11.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (isLinked) value!! else "Not Linked",
+                        color = if (isLinked) Color.White else Color.Gray,
+                        fontSize = 13.sp,
+                        fontWeight = if (isLinked) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isLinked && badgeColor != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Filled.Verified,
+                            contentDescription = "Verified Link",
+                            tint = badgeColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+        if (isLinked) {
+            Icon(
+                imageVector = Icons.Filled.ArrowOutward,
+                contentDescription = "Open Link",
+                tint = Color(0xFFFFD700).copy(0.7f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 

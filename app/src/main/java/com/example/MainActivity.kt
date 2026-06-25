@@ -4,19 +4,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,9 +42,9 @@ class MainActivity : ComponentActivity() {
             val viewModel: MisterCodesViewModel = viewModel()
             val isDarkSystem by viewModel.isDarkMode.collectAsState()
             val userProfile by viewModel.userProfile.collectAsState()
-            val isPremium = userProfile?.isPremium == true
+            val isPremiumTheme = userProfile?.isPremium == true && userProfile?.premiumTier == 3
 
-            MyApplicationTheme(darkTheme = isDarkSystem, dynamicColor = false, isPremium = isPremium) {
+            MyApplicationTheme(darkTheme = isDarkSystem, dynamicColor = false, isPremium = isPremiumTheme) {
                 val outerNavController = rememberNavController()
 
                 NavHost(
@@ -294,18 +298,88 @@ fun MainHubContainer(viewModel: MisterCodesViewModel, onLogout: () -> Unit) {
                             onNavigateToConsole = { activeSubView = "console" },
                             onNavigateToAssistant = { activeTab = MisterCodesHub.ASSISTANT }
                         )
-                        MisterCodesHub.ASSISTANT -> AiAssistantScreen(
-                            viewModel = viewModel
-                        )
+                        MisterCodesHub.ASSISTANT -> {
+                            AiAssistantScreen(viewModel = viewModel)
+                        }
                         MisterCodesHub.LEARNING -> LearningScreen(
                             viewModel = viewModel,
                             onNavigateToEditor = { activeTab = MisterCodesHub.EDITOR }
                         )
-                        MisterCodesHub.PROJECTS -> ProjectsScreen(
-                            viewModel = viewModel,
-                            onNavigateToEditor = { activeTab = MisterCodesHub.EDITOR }
-                        )
+                        MisterCodesHub.PROJECTS -> {
+                            ProjectsScreen(
+                                viewModel = viewModel,
+                                onNavigateToEditor = { activeTab = MisterCodesHub.EDITOR }
+                            )
+                        }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PremiumLockPlaceholder(featureName: String, onNavigateToProfile: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF070A13))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF151D30)),
+            border = BorderStroke(1.5.dp, Color(0xFFFFD700).copy(0.4f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color(0xFFFFD700).copy(alpha = 0.1f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = "Feature Locked",
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = "Premium Workspace Required",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "The $featureName is an advanced professional feature. Upgrade to Premium Profile to unlock full visual themes, premium styling, and 25% extra XP!",
+                    color = Color.LightGray,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Button(
+                    onClick = onNavigateToProfile,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700), contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Text("Go to Profile to Activate 🚀", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }

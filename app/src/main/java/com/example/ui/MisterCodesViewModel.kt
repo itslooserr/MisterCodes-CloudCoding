@@ -90,6 +90,11 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
     private val _workspacePasscode = MutableStateFlow("")
     val workspacePasscode = _workspacePasscode.asStateFlow()
 
+    // Interactive JavaScript Simulated Variables for Sandbox
+    val userLevelSimulated = MutableStateFlow(55)
+    val loginStreakSimulated = MutableStateFlow(6)
+    val isFirstTimePurchase = MutableStateFlow(true)
+
     // Secure local workspace locking status
     val isWorkspaceSecureLocked = MutableStateFlow(true)
 
@@ -161,8 +166,23 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
     val selectedOtherProfileAuthor = MutableStateFlow<String?>(null)
 
     private fun generateRandomPasscode(): String {
-        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        return (1..8).map { chars.random() }.joinToString("")
+        val upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        val lower = "abcdefghijklmnopqrstuvwxyz"
+        val digits = "0123456789"
+        val special = "#$@!&*-"
+        val pool = upper + lower + digits + special
+        
+        // Guarantee 1 uppercase, 1 lowercase, 1 digit, 1 special character, and 2 randoms to make exactly 6 characters
+        val list = mutableListOf(
+            upper.random(),
+            lower.random(),
+            digits.random(),
+            special.random()
+        )
+        repeat(2) {
+            list.add(pool.random())
+        }
+        return list.shuffled().joinToString("")
     }
 
     private fun sendPushNotification(title: String, message: String) {
@@ -280,11 +300,42 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                 kotlinx.coroutines.delay(5000) // check every 5 seconds
                 val profile = userProfile.value
                 if (profile != null && profile.isLoggedIn) {
+                    // Check premium tier expiration
+                    val nowTime = System.currentTimeMillis()
+                    if (profile.isPremium && profile.premiumTier in listOf(1, 2) && nowTime > profile.premiumExpiresAt) {
+                        val expiredProfile = profile.copy(
+                            isPremium = false,
+                            isTrial = false,
+                            trialEndsAt = 0L,
+                            premiumTier = 0,
+                            premiumExpiresAt = 0L,
+                            premiumIsCanceled = false
+                        )
+                        repository.saveProfile(expiredProfile)
+                        sendPushNotification(
+                            "💔 Premium Tier Expired!",
+                            "Your premium subscription/trial has ended. Upgrade again to unlock professional status & themes!"
+                        )
+                        continue
+                    }
+
                     val oldXp = profile.xp
                     // Choose an engaging random increment from 0.08 up to 1.70 for real-time bursts
                     val randomIncrement = 0.08 + (Math.random() * (1.70 - 0.08))
                     val roundedIncrement = Math.round(randomIncrement * 100.0) / 100.0
-                    val newXp = oldXp + roundedIncrement
+                    
+                    // Dynamic Premium XP multiplier bonus based on tier
+                    val multiplier = if (profile.isPremium) {
+                        when (profile.premiumTier) {
+                            1 -> 1.05  // Trial +5%
+                            2 -> 1.25  // Temporary +25%
+                            3 -> 1.50  // Permanent +50%
+                            else -> 1.25
+                        }
+                    } else 1.0
+                    val finalIncrement = Math.round(roundedIncrement * multiplier * 100.0) / 100.0
+                    
+                    val newXp = oldXp + finalIncrement
                     val newLevel = (newXp / 100.0).toInt() + 1
 
                     // check milestones
@@ -904,12 +955,14 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                         val reward = it.xpReward
                         val profile = userProfile.value
                         if (profile != null) {
-                            val newXp = profile.xp + reward
+                            val multiplier = if (profile.isPremium) 1.25 else 1.0
+                            val finalReward = Math.round(reward * multiplier * 100.0) / 100.0
+                            val newXp = profile.xp + finalReward
                             val newLevel = (newXp / 100.0).toInt() + 1
                             repository.saveProfile(profile.copy(xp = newXp, level = newLevel))
                             sendPushNotification(
                                 "🎓 Academic Project Completed!",
-                                "You finished '${it.title}' and gained $reward XP!"
+                                "You finished '${it.title}' and gained $finalReward XP!"
                             )
                         }
                         markMissionReadyToClaim(4)
@@ -991,16 +1044,18 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
                 // Save Profile / Reward XP
                 val profile = userProfile.value
                 if (profile != null) {
-                    val newXp = profile.xp + rewardClaimed
+                    val multiplier = if (profile.isPremium) 1.25 else 1.0
+                    val finalReward = Math.round(rewardClaimed * multiplier * 100.0) / 100.0
+                    val newXp = profile.xp + finalReward
                     val newLevel = (newXp / 100.0).toInt() + 1
                     repository.saveProfile(profile.copy(xp = newXp, level = newLevel))
                     sendPushNotification(
                         "🏆 Milestone Achieved!",
-                        "Finished: '$missionTitle', claimed $rewardClaimed XP! Replaced with: '${candidate.title}'"
+                        "Finished: '$missionTitle', claimed $finalReward XP! Replaced with: '${candidate.title}'"
                     )
                     addActivityLog(
                         "CLAIM_MISSION",
-                        "Completed Daily Mission: '$missionTitle' and earned $rewardClaimed XP. Replaced with '${candidate.title}'"
+                        "Completed Daily Mission: '$missionTitle' and earned $finalReward XP. Replaced with '${candidate.title}'"
                     )
                 }
             }
@@ -1119,6 +1174,150 @@ class MisterCodesViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val curr = userProfile.value ?: UserProfile()
             repository.updateProfileWithDetails(curr.username, curr.email, curr.bio, newSeed)
+        }
+    }
+
+    fun activatePremiumTier(tier: Int, transactionId: String, utr: String) {
+        viewModelScope.launch {
+            val profile = userProfile.value ?: UserProfile()
+            val isFirstTime = isFirstTimePurchase.value
+            
+            val durationMs = when (tier) {
+                1 -> 24 * 3600 * 1000L // 24 hours
+                2 -> if (isFirstTime) 45L * 24 * 3600 * 1000L else 30L * 24 * 3600 * 1000L
+                3 -> 365L * 24 * 3600 * 1000L
+                else -> 0L
+            }
+            
+            val expiresAt = System.currentTimeMillis() + durationMs
+            
+            // Give 1500 XP one-time bonus
+            val updatedXp = profile.xp + 1500.0
+            val updatedLevel = (updatedXp / 100.0).toInt() + 1
+            
+            val updatedProfile = profile.copy(
+                isPremium = true,
+                isTrial = (tier == 1),
+                trialEndsAt = if (tier == 1) expiresAt else 0L,
+                premiumTier = tier,
+                premiumExpiresAt = expiresAt,
+                premiumActivatedAt = System.currentTimeMillis(),
+                premiumIsCanceled = false,
+                xp = updatedXp,
+                level = updatedLevel
+            )
+            repository.saveProfile(updatedProfile)
+            
+            val tierName = when (tier) {
+                1 -> "Silver Trial Tier"
+                2 -> "Blue Temporary Tier"
+                3 -> "Gold Permanent Tier"
+                else -> "Premium Tier"
+            }
+            
+            sendPushNotification(
+                "👑 $tierName Activated!",
+                "Premium Active! Received +1500 XP bonus and professional features!"
+            )
+            addActivityLog(
+                "PREMIUM_ACTIVATED",
+                "Activated Premium ($tierName) - Trx: $transactionId, UTR: $utr. Received 1500 XP!"
+            )
+            
+            // Toggle first-time purchase
+            isFirstTimePurchase.value = false
+        }
+    }
+
+    fun cancelPremiumTier() {
+        viewModelScope.launch {
+            val profile = userProfile.value ?: return@launch
+            val tier = profile.premiumTier
+            val activatedAt = profile.premiumActivatedAt
+            val isFirstTime = isFirstTimePurchase.value
+            
+            when (tier) {
+                1 -> {
+                    // Trial: Non-refundable, cancel anytime. Deactivates trial immediately.
+                    val updated = profile.copy(
+                        isPremium = false,
+                        isTrial = false,
+                        premiumTier = 0,
+                        premiumExpiresAt = 0L,
+                        trialEndsAt = 0L,
+                        premiumIsCanceled = false
+                    )
+                    repository.saveProfile(updated)
+                    sendPushNotification("💔 Trial Cancelled", "Your Silver Trial premium tier has been cancelled. No refund is issued.")
+                    addActivityLog("PREMIUM_CANCELLED", "Cancelled Silver Trial plan. Non-refundable.")
+                }
+                2 -> {
+                    // Temporary: 25% refundable. Cancel anytime. Active until period ends.
+                    val paidPrice = if (isFirstTime) 25.0 else 29.0
+                    val refundAmt = paidPrice * 0.25
+                    val updated = profile.copy(
+                        premiumIsCanceled = true
+                    )
+                    repository.saveProfile(updated)
+                    sendPushNotification("💔 Temporary Subscription Cancelled", "Cancelled Blue subscription. Refund of ₹${String.format("%.2f", refundAmt)} (25%) initiated. Subscription remains active until period ends.")
+                    addActivityLog("PREMIUM_CANCELLED", "Cancelled Temporary Monthly subscription. 25% refund of ₹${String.format("%.2f", refundAmt)} initiated. Subscription remains active.")
+                }
+                3 -> {
+                    // Permanent: Refundable within 3 months (90 days).
+                    val diffDays = (System.currentTimeMillis() - activatedAt) / (24 * 3600 * 1000L)
+                    if (diffDays <= 90) {
+                        val refundAmt = 99.0 * 0.89
+                        val updated = profile.copy(
+                            isPremium = false,
+                            premiumTier = 0,
+                            premiumExpiresAt = 0L,
+                            premiumIsCanceled = false
+                        )
+                        repository.saveProfile(updated)
+                        sendPushNotification("💔 Permanent Tier Refunded", "Cancelled Golden plan within 3 months. Refund of ₹${String.format("%.2f", refundAmt)} (89%) initiated. Premium deactivated.")
+                        addActivityLog("PREMIUM_CANCELLED", "Cancelled Permanent plan within 90 days. 89% refund of ₹${String.format("%.2f", refundAmt)} initiated. Premium deactivated.")
+                    } else {
+                        sendPushNotification("⚠️ Cancellation Failed", "Permanent plan can only be cancelled within the first 3 months (90 days).")
+                    }
+                }
+            }
+        }
+    }
+
+    fun reactivatePremiumTier() {
+        viewModelScope.launch {
+            val profile = userProfile.value ?: return@launch
+            if (profile.premiumTier == 2 && profile.premiumIsCanceled) {
+                val updated = profile.copy(
+                    premiumIsCanceled = false
+                )
+                repository.saveProfile(updated)
+                sendPushNotification("⚡ Subscription Reactivated", "Your temporary premium subscription is active again!")
+                addActivityLog("PREMIUM_REACTIVATED", "Reactivated canceled temporary monthly subscription.")
+            }
+        }
+    }
+
+    fun updatePremiumProfile(
+        github: String,
+        instagram: String,
+        gitProfile: String,
+        linkedin: String,
+        website: String,
+        animation: String
+    ) {
+        viewModelScope.launch {
+            val profile = userProfile.value ?: UserProfile()
+            val updatedProfile = profile.copy(
+                githubLink = github.trim(),
+                instagramLink = instagram.trim(),
+                gitProfileLink = gitProfile.trim(),
+                linkedinLink = linkedin.trim(),
+                websiteLink = website.trim(),
+                selectedAnimation = animation
+            )
+            repository.saveProfile(updatedProfile)
+            sendPushNotification("✨ Profile Updated!", "Your professional links and premium animations are updated successfully.")
         }
     }
 

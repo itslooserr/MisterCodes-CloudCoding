@@ -246,7 +246,19 @@ class MisterCodesRepository private constructor(context: Context) {
                     aiGenerated = profile.aiGenerated,
                     sharedSnippetPosted = profile.sharedSnippetPosted,
                     consolePioneered = profile.consolePioneered,
-                    isPremium = profile.isPremium
+                    isPremium = profile.isPremium,
+                    githubLink = profile.githubLink,
+                    instagramLink = profile.instagramLink,
+                    gitProfileLink = profile.gitProfileLink,
+                    linkedinLink = profile.linkedinLink,
+                    websiteLink = profile.websiteLink,
+                    selectedAnimation = profile.selectedAnimation,
+                    isTrial = profile.isTrial,
+                    trialEndsAt = profile.trialEndsAt,
+                    premiumTier = profile.premiumTier,
+                    premiumExpiresAt = profile.premiumExpiresAt,
+                    premiumActivatedAt = profile.premiumActivatedAt,
+                    premiumIsCanceled = profile.premiumIsCanceled
                 )
             )
         }
@@ -356,7 +368,20 @@ class MisterCodesRepository private constructor(context: Context) {
             bio = newUser.bio,
             aiGenerated = newUser.aiGenerated,
             sharedSnippetPosted = newUser.sharedSnippetPosted,
-            consolePioneered = newUser.consolePioneered
+            consolePioneered = newUser.consolePioneered,
+            isPremium = newUser.isPremium,
+            githubLink = newUser.githubLink,
+            instagramLink = newUser.instagramLink,
+            gitProfileLink = newUser.gitProfileLink,
+            linkedinLink = newUser.linkedinLink,
+            websiteLink = newUser.websiteLink,
+            selectedAnimation = newUser.selectedAnimation,
+            isTrial = newUser.isTrial,
+            trialEndsAt = newUser.trialEndsAt,
+            premiumTier = newUser.premiumTier,
+            premiumExpiresAt = newUser.premiumExpiresAt,
+            premiumActivatedAt = newUser.premiumActivatedAt,
+            premiumIsCanceled = newUser.premiumIsCanceled
         )
         saveProfile(profile)
         return true
@@ -391,7 +416,19 @@ class MisterCodesRepository private constructor(context: Context) {
                 aiGenerated = existing.aiGenerated,
                 sharedSnippetPosted = existing.sharedSnippetPosted,
                 consolePioneered = existing.consolePioneered,
-                isPremium = existing.isPremium
+                isPremium = existing.isPremium,
+                githubLink = existing.githubLink,
+                instagramLink = existing.instagramLink,
+                gitProfileLink = existing.gitProfileLink,
+                linkedinLink = existing.linkedinLink,
+                websiteLink = existing.websiteLink,
+                selectedAnimation = existing.selectedAnimation,
+                isTrial = existing.isTrial,
+                trialEndsAt = existing.trialEndsAt,
+                premiumTier = existing.premiumTier,
+                premiumExpiresAt = existing.premiumExpiresAt,
+                premiumActivatedAt = existing.premiumActivatedAt,
+                premiumIsCanceled = existing.premiumIsCanceled
             )
             saveProfile(loadedProfile)
             return true
@@ -421,7 +458,19 @@ class MisterCodesRepository private constructor(context: Context) {
                     aiGenerated = profile.aiGenerated,
                     sharedSnippetPosted = profile.sharedSnippetPosted,
                     consolePioneered = profile.consolePioneered,
-                    isPremium = profile.isPremium
+                    isPremium = profile.isPremium,
+                    githubLink = profile.githubLink,
+                    instagramLink = profile.instagramLink,
+                    gitProfileLink = profile.gitProfileLink,
+                    linkedinLink = profile.linkedinLink,
+                    websiteLink = profile.websiteLink,
+                    selectedAnimation = profile.selectedAnimation,
+                    isTrial = profile.isTrial,
+                    trialEndsAt = profile.trialEndsAt,
+                    premiumTier = profile.premiumTier,
+                    premiumExpiresAt = profile.premiumExpiresAt,
+                    premiumActivatedAt = profile.premiumActivatedAt,
+                    premiumIsCanceled = profile.premiumIsCanceled
                 )
                 dao.insertRegisteredUser(reg)
             }

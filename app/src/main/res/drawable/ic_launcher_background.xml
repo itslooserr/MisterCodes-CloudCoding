@@ -6,7 +6,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Sophisticated linear background gradient from dark royal deep blue to midnight slate -->
+    <!-- Sophisticated minimal obsidian background gradient -->
     <path
         android:pathData="M0,0h108v108h-108z">
         <aapt:attr name="android:fillColor">
@@ -16,23 +16,9 @@
                 android:endX="108"
                 android:endY="108"
                 android:type="linear">
-                <item android:offset="0.0" android:color="#03060E" />
-                <item android:offset="1.0" android:color="#0B1220" />
+                <item android:offset="0.0" android:color="#09090D" />
+                <item android:offset="1.0" android:color="#13141F" />
             </gradient>
         </aapt:attr>
     </path>
-
-    <!-- Glowing cyber matrix grid lines -->
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M18,0 L18,108 M36,0 L36,108 M54,0 L54,108 M72,0 L72,108 M90,0 L90,108 M0,18 L108,18 M0,36 L108,36 M0,54 L108,54 M0,72 L108,72 M0,90 L108,90"
-        android:strokeWidth="0.5"
-        android:strokeColor="#1E2B45" />
-
-    <!-- Subtle deep neon circular target rings for mechanical precision / depth -->
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M 54,54 m -42,0 a 42,42 0 1,0 84,0 a 42,42 0 1,0 -84,0"
-        android:strokeWidth="0.8"
-        android:strokeColor="#3300E5FF" />
 </vector>
